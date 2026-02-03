@@ -154,7 +154,7 @@
           return raw ? JSON.parse(raw) : null;
         } catch (e) {
           console.error('Storage get error:', e);
-          return null;
+          return memoryStore.get(key) ?? null;
         }
       },
       async set(key, data) {
@@ -170,6 +170,7 @@
           return true;
         } catch (e) {
           console.error('Storage set error:', e);
+          memoryStore.set(key, data);
           return false;
         }
       },
