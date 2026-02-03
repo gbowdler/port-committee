@@ -19,3 +19,4 @@ If you open `index.html` via `file://`, the app will fall back to `localStorage`
 ## Storage behavior
 
 The app prefers server storage when running over HTTP and falls back to `localStorage` if the API is unavailable or if the file is opened directly. If the browser blocks `localStorage`, it keeps data in-memory for the current session.
+The app prefers server storage when running over HTTP and falls back to `localStorage` if the API is unavailable or if the file is opened directly.
