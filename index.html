@@ -100,6 +100,47 @@
 
     /* ───────────────── Storage Helpers ───────────────── */
 
+    let serverStorageAvailable = null;
+
+    const canUseServerStorage = () => {
+      if (serverStorageAvailable === false) return false;
+      return window.location.protocol.startsWith('http');
+    };
+
+    const serverStorage = {
+      async get(key) {
+        if (!canUseServerStorage()) return null;
+        try {
+          const res = await fetch(`/api/storage?key=${encodeURIComponent(key)}`);
+          if (!res.ok) throw new Error(`Server storage GET failed: ${res.status}`);
+          const data = await res.json();
+          serverStorageAvailable = true;
+          return data.value ? JSON.parse(data.value) : null;
+        } catch (e) {
+          serverStorageAvailable = false;
+          console.warn('Server storage unavailable, falling back to localStorage.', e);
+          return null;
+        }
+      },
+      async set(key, json) {
+        if (!canUseServerStorage()) return false;
+        try {
+          const res = await fetch('/api/storage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, value: json }),
+          });
+          if (!res.ok) throw new Error(`Server storage SET failed: ${res.status}`);
+          serverStorageAvailable = true;
+          return true;
+        } catch (e) {
+          serverStorageAvailable = false;
+          console.warn('Server storage unavailable, falling back to localStorage.', e);
+          return false;
+        }
+      },
+    };
+
     const storage = {
       async get(key) {
         try {
@@ -107,6 +148,8 @@
             const raw = await window.storage.get(key, true);
             return raw ? JSON.parse(raw) : null;
           }
+          const serverValue = await serverStorage.get(key);
+          if (serverValue !== null) return serverValue;
           const raw = localStorage.getItem(key);
           return raw ? JSON.parse(raw) : null;
         } catch (e) {
@@ -119,9 +162,11 @@
           const json = JSON.stringify(data);
           if (window.storage && typeof window.storage.set === 'function') {
             await window.storage.set(key, json, true);
-          } else {
-            localStorage.setItem(key, json);
+            return true;
           }
+          const serverSaved = await serverStorage.set(key, json);
+          if (serverSaved) return true;
+          localStorage.setItem(key, json);
           return true;
         } catch (e) {
           console.error('Storage set error:', e);
