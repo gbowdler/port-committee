@@ -1,0 +1,9 @@
+{
+  "name": "port-committee",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Local server for Port Committee index.html with simple JSON storage.",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
