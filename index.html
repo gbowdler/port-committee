@@ -101,26 +101,10 @@
     /* ───────────────── Storage Helpers ───────────────── */
 
     let serverStorageAvailable = null;
-    let localStorageAvailable = null;
-    const memoryStore = new Map();
 
     const canUseServerStorage = () => {
       if (serverStorageAvailable === false) return false;
       return window.location.protocol.startsWith('http');
-    };
-
-    const canUseLocalStorage = () => {
-      if (localStorageAvailable !== null) return localStorageAvailable;
-      try {
-        const testKey = '__pc_storage_test__';
-        localStorage.setItem(testKey, '1');
-        localStorage.removeItem(testKey);
-        localStorageAvailable = true;
-      } catch (e) {
-        localStorageAvailable = false;
-        console.warn('localStorage unavailable, falling back to in-memory storage.', e);
-      }
-      return localStorageAvailable;
     };
 
     const serverStorage = {
@@ -166,12 +150,8 @@
           }
           const serverValue = await serverStorage.get(key);
           if (serverValue !== null) return serverValue;
-          if (canUseLocalStorage()) {
-            const raw = localStorage.getItem(key);
-            if (raw) return JSON.parse(raw);
-          }
-          if (memoryStore.has(key)) return memoryStore.get(key);
-          return null;
+          const raw = localStorage.getItem(key);
+          return raw ? JSON.parse(raw) : null;
         } catch (e) {
           console.error('Storage get error:', e);
           return memoryStore.get(key) ?? null;
@@ -185,11 +165,9 @@
             return true;
           }
           const serverSaved = await serverStorage.set(key, json);
-          if (canUseLocalStorage()) {
-            localStorage.setItem(key, json);
-          }
-          memoryStore.set(key, data);
-          return serverSaved || canUseLocalStorage();
+          if (serverSaved) return true;
+          localStorage.setItem(key, json);
+          return true;
         } catch (e) {
           console.error('Storage set error:', e);
           memoryStore.set(key, data);
