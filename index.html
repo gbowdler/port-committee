@@ -8,6 +8,9 @@
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -162,42 +165,39 @@
     /*
      * PORT COMMITTEE APP
      *
-     * STORAGE STATUS: Using localStorage (browser-only, not shared)
+     * STORAGE: Firebase Firestore (cloud-based, shared across all users)
      *
-     * MIGRATION PLAN:
-     * This app currently uses localStorage which means:
-     * - Data is stored only in YOUR browser
-     * - Other users cannot see your data
-     * - Data is lost if you clear browser data
+     * All Port Committee members access the same data in real-time.
+     * Data is stored in Google's Firebase cloud infrastructure.
      *
-     * To enable shared data between all Port Committee members:
-     *
-     * OPTION A - Deploy Node.js Server:
-     *   1. Deploy server.js to Render/Railway/Glitch
-     *   2. Update storage helper to fetch from server API
-     *   3. Export existing localStorage data via Export button
-     *   4. Import into server storage
-     *
-     * OPTION B - Use Cloud Database:
-     *   1. Create free Firebase/Supabase account
-     *   2. Get API key
-     *   3. Replace storage helper with Firebase/Supabase SDK calls
-     *   4. Export existing localStorage data via Export button
-     *   5. Import into cloud database
-     *
-     * Both options require changes in the storage helper only.
-     * All other app code remains the same.
+     * File attachments are stored in Firebase Storage.
      */
 
     const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+    /* ───────────────── Firebase Initialization ───────────────── */
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAdBfk1roLWIrND0UpsCyejcirT0RVXtbM",
+      authDomain: "port-committee.firebaseapp.com",
+      projectId: "port-committee",
+      storageBucket: "port-committee.firebasestorage.app",
+      messagingSenderId: "603218289835",
+      appId: "1:603218289835:web:e95d41e140dc53818843ee",
+      measurementId: "G-CLYQ44S74E"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const firebaseStorage = firebase.storage();
 
     /* ───────────────── Storage Helpers ───────────────── */
 
     const storage = {
       async get(key) {
         try {
-          const data = localStorage.getItem(key);
-          return data ? JSON.parse(data) : null;
+          const doc = await db.collection('portCommittee').doc(key).get();
+          return doc.exists ? doc.data().value : null;
         } catch (error) {
           console.error('Storage get error:', error);
           return null;
@@ -205,7 +205,11 @@
       },
       async set(key, value) {
         try {
-          localStorage.setItem(key, JSON.stringify(value));
+          if (value === null || value === undefined) {
+            await db.collection('portCommittee').doc(key).delete();
+          } else {
+            await db.collection('portCommittee').doc(key).set({ value });
+          }
           return true;
         } catch (error) {
           console.error('Storage set error:', error);
@@ -214,7 +218,7 @@
       },
       async remove(key) {
         try {
-          localStorage.removeItem(key);
+          await db.collection('portCommittee').doc(key).delete();
           return true;
         } catch (error) {
           console.error('Storage remove error:', error);
@@ -438,7 +442,13 @@
                       const file = e.target.files?.[0];
                       if (!file) return;
                       const reader = new FileReader();
-                      reader.onload = (ev) => setForm({ ...form, photo: ev.target.result });
+                      reader.onload = async (ev) => {
+                        let photo = ev.target.result;
+                        if (file.type.startsWith('image/')) {
+                          photo = await compressImage(photo);
+                        }
+                        setForm(f => ({ ...f, photo }));
+                      };
                       reader.readAsDataURL(file);
                     }}
                   />
@@ -1287,31 +1297,46 @@
           return;
         }
         const uploaderName = localStorage.getItem('pc_member') || 'Unknown';
-        let data = await fileToBase64(file);
-        if (file.type.startsWith('image/')) {
-          data = await compressImage(data);
-        }
-        const att = {
-          id: `att_${Date.now()}`,
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          data,
-          uploadedBy: uploaderName,
-          uploadedAt: new Date().toISOString(),
-        };
-        const attachments = [...(meeting.attachments || []), att];
-        const updated = { ...meeting, attachments };
-        const ok = await storage.set(`meeting:${meetingId}`, updated);
-        if (ok) {
-          setMeeting(updated);
-          showToast('File attached!');
-        } else {
-          showToast('Failed to save — storage may be full.', 'error');
+        try {
+          showToast('Uploading file...');
+          const storagePath = `meetings/${meetingId}/${Date.now()}_${file.name}`;
+          const fileRef = firebaseStorage.ref().child(storagePath);
+          await fileRef.put(file);
+          const downloadURL = await fileRef.getDownloadURL();
+          const att = {
+            id: `att_${Date.now()}`,
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            url: downloadURL,
+            path: storagePath,
+            uploadedBy: uploaderName,
+            uploadedAt: new Date().toISOString(),
+          };
+          const attachments = [...(meeting.attachments || []), att];
+          const updated = { ...meeting, attachments };
+          const ok = await storage.set(`meeting:${meetingId}`, updated);
+          if (ok) {
+            setMeeting(updated);
+            showToast('File attached!');
+          } else {
+            showToast('Failed to save attachment metadata.', 'error');
+          }
+        } catch (error) {
+          console.error('Upload error:', error);
+          showToast('Failed to upload file.', 'error');
         }
       };
 
       const deleteAttachment = async (attId) => {
+        const att = (meeting.attachments || []).find(a => a.id === attId);
+        if (att?.path) {
+          try {
+            await firebaseStorage.ref().child(att.path).delete();
+          } catch (error) {
+            console.error('Failed to delete file from storage:', error);
+          }
+        }
         const attachments = (meeting.attachments || []).filter(a => a.id !== attId);
         const updated = { ...meeting, attachments };
         await storage.set(`meeting:${meetingId}`, updated);
@@ -1320,11 +1345,20 @@
         showToast('Attachment removed');
       };
 
-      const downloadAttachment = (att) => {
-        const a = document.createElement('a');
-        a.href = att.data;
-        a.download = att.name;
-        a.click();
+      const downloadAttachment = async (att) => {
+        const src = att.url || att.data;
+        try {
+          const response = await fetch(src);
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = att.name;
+          a.click();
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          window.open(src, '_blank');
+        }
       };
 
       if (loading) return <Spinner />;
@@ -1363,7 +1397,7 @@
           {previewAtt && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm fade-in p-4" onClick={() => setPreviewAtt(null)}>
               <div className="max-w-3xl max-h-[90vh] overflow-auto" onClick={e => e.stopPropagation()}>
-                <img src={previewAtt.data} alt={previewAtt.name} className="max-w-full rounded-lg" />
+                <img src={previewAtt.url || previewAtt.data} alt={previewAtt.name} className="max-w-full rounded-lg" />
                 <div className="flex justify-center gap-3 mt-3">
                   <button onClick={() => downloadAttachment(previewAtt)} className="px-4 py-2 rounded-lg glass-light text-port-200 hover:bg-white/10 transition text-sm">Download</button>
                   <button onClick={() => setPreviewAtt(null)} className="px-4 py-2 rounded-lg glass-light text-port-200 hover:bg-white/10 transition text-sm">Close</button>
@@ -1505,7 +1539,7 @@
                       <div className="flex items-center gap-3">
                         {isImage ? (
                           <button onClick={() => setPreviewAtt(att)} className="flex-shrink-0">
-                            <img src={att.data} alt={att.name} className="w-12 h-12 object-cover rounded border border-white/10" />
+                            <img src={att.url || att.data} alt={att.name} className="w-12 h-12 object-cover rounded border border-white/10" />
                           </button>
                         ) : (
                           <div className="flex-shrink-0 w-12 h-12 rounded border border-white/10 flex items-center justify-center bg-white/[0.02]">
@@ -1660,6 +1694,53 @@
         reader.readAsText(file);
       });
     }
+
+    /* ───────────────── Migration Helper ───────────────── */
+
+    async function migrateLocalStorageToFirebase() {
+      console.log('Starting migration from localStorage to Firebase...');
+      const keys = Object.keys(localStorage).filter(k => k !== 'pc_member');
+      let migrated = 0;
+
+      for (const key of keys) {
+        try {
+          const value = JSON.parse(localStorage.getItem(key));
+
+          // If this is a meeting with base64 attachments, upload them to Firebase Storage
+          if (key.startsWith('meeting:') && value?.attachments) {
+            for (let i = 0; i < value.attachments.length; i++) {
+              const att = value.attachments[i];
+              if (att.data && !att.url) {
+                try {
+                  const response = await fetch(att.data);
+                  const blob = await response.blob();
+                  const storagePath = `meetings/${value.id}/${att.id}_${att.name}`;
+                  const fileRef = firebaseStorage.ref().child(storagePath);
+                  await fileRef.put(blob);
+                  const downloadURL = await fileRef.getDownloadURL();
+                  value.attachments[i] = { ...att, url: downloadURL, path: storagePath };
+                  delete value.attachments[i].data;
+                  console.log(`  Uploaded attachment: ${att.name}`);
+                } catch (err) {
+                  console.error(`  Failed to upload attachment ${att.name}:`, err);
+                }
+              }
+            }
+          }
+
+          await storage.set(key, value);
+          migrated++;
+          console.log(`Migrated: ${key}`);
+        } catch (error) {
+          console.error(`Failed to migrate ${key}:`, error);
+        }
+      }
+
+      console.log(`Migration complete! ${migrated} items migrated to Firebase.`);
+      console.log('You can verify data in Firebase Console, then clear localStorage if desired.');
+    }
+
+    // To run migration, open browser console and call: migrateLocalStorageToFirebase()
 
     /* ───────────────── Main App ───────────────── */
 
@@ -1899,9 +1980,8 @@
             )}
           </main>
 
-          {/* Local storage warning */}
           <footer className="max-w-5xl mx-auto px-4 py-4 text-center">
-            <p className="text-port-500 text-xs">Local storage only &mdash; data is saved in this browser and not shared between users.</p>
+            <p className="text-port-500 text-xs">Cloud storage &mdash; data is shared across all Port Committee members.</p>
           </footer>
         </div>
       );
