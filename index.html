@@ -49,7 +49,7 @@
     }
 
     /* ── Dynamic theme background layers ── */
-    #theme-bg, #theme-bg-overlay {
+    #theme-bg {
       position: fixed;
       inset: 0;
       z-index: 0;
@@ -57,9 +57,7 @@
       transition: opacity 0.6s ease;
     }
     #theme-bg { opacity: 0; }
-    #theme-bg-overlay { opacity: 0; }
     #theme-bg.active { opacity: 1; }
-    #theme-bg-overlay.active { opacity: 1; }
 
     /* ── Shared styles (always active) ── */
     #root { position: relative; z-index: 1; }
@@ -92,87 +90,73 @@
 </head>
 <body class="min-h-screen text-port-200">
   <div id="theme-bg"></div>
-  <div id="theme-bg-overlay"></div>
   <div id="root"></div>
 
   <script type="text/babel">
+    /*
+     * PORT COMMITTEE APP
+     *
+     * STORAGE STATUS: Using localStorage (browser-only, not shared)
+     *
+     * MIGRATION PLAN:
+     * This app currently uses localStorage which means:
+     * - Data is stored only in YOUR browser
+     * - Other users cannot see your data
+     * - Data is lost if you clear browser data
+     *
+     * To enable shared data between all Port Committee members:
+     *
+     * OPTION A - Deploy Node.js Server:
+     *   1. Deploy server.js to Render/Railway/Glitch
+     *   2. Update storage helper to fetch from server API
+     *   3. Export existing localStorage data via Export button
+     *   4. Import into server storage
+     *
+     * OPTION B - Use Cloud Database:
+     *   1. Create free Firebase/Supabase account
+     *   2. Get API key
+     *   3. Replace storage helper with Firebase/Supabase SDK calls
+     *   4. Export existing localStorage data via Export button
+     *   5. Import into cloud database
+     *
+     * Both options require changes in the storage helper only.
+     * All other app code remains the same.
+     */
+
     const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
     /* ───────────────── Storage Helpers ───────────────── */
 
-    let serverStorageAvailable = null;
-
-    const canUseServerStorage = () => {
-      if (serverStorageAvailable === false) return false;
-      return window.location.protocol.startsWith('http');
-    };
-
-    const serverStorage = {
-      async get(key) {
-        if (!canUseServerStorage()) return null;
-        try {
-          const res = await fetch(`/api/storage?key=${encodeURIComponent(key)}`);
-          if (!res.ok) throw new Error(`Server storage GET failed: ${res.status}`);
-          const data = await res.json();
-          serverStorageAvailable = true;
-          return data.value ? JSON.parse(data.value) : null;
-        } catch (e) {
-          serverStorageAvailable = false;
-          console.warn('Server storage unavailable, falling back to localStorage.', e);
-          return null;
-        }
-      },
-      async set(key, json) {
-        if (!canUseServerStorage()) return false;
-        try {
-          const res = await fetch('/api/storage', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key, value: json }),
-          });
-          if (!res.ok) throw new Error(`Server storage SET failed: ${res.status}`);
-          serverStorageAvailable = true;
-          return true;
-        } catch (e) {
-          serverStorageAvailable = false;
-          console.warn('Server storage unavailable, falling back to localStorage.', e);
-          return false;
-        }
-      },
-    };
-
     const storage = {
       async get(key) {
         try {
-          if (window.storage && typeof window.storage.get === 'function') {
-            const raw = await window.storage.get(key, true);
-            return raw ? JSON.parse(raw) : null;
-          }
-          const serverValue = await serverStorage.get(key);
-          if (serverValue !== null) return serverValue;
-          const raw = localStorage.getItem(key);
-          return raw ? JSON.parse(raw) : null;
-        } catch (e) {
-          console.error('Storage get error:', e);
-          return memoryStore.get(key) ?? null;
+          const data = localStorage.getItem(key);
+          return data ? JSON.parse(data) : null;
+        } catch (error) {
+          console.error('Storage get error:', error);
+          return null;
         }
       },
-      async set(key, data) {
+      async set(key, value) {
         try {
-          const json = JSON.stringify(data);
-          if (window.storage && typeof window.storage.set === 'function') {
-            await window.storage.set(key, json, true);
-            return true;
-          }
-          const serverSaved = await serverStorage.set(key, json);
-          if (serverSaved) return true;
-          localStorage.setItem(key, json);
+          localStorage.setItem(key, JSON.stringify(value));
           return true;
-        } catch (e) {
-          console.error('Storage set error:', e);
-          memoryStore.set(key, data);
+        } catch (error) {
+          console.error('Storage set error:', error);
           return false;
         }
+      },
+      async remove(key) {
+        try {
+          localStorage.removeItem(key);
+          return true;
+        } catch (error) {
+          console.error('Storage remove error:', error);
+          return false;
+        }
+      },
+      async getMulti(keys) {
+        return Promise.all(keys.map(key => this.get(key)));
       },
     };
 
@@ -189,305 +173,20 @@
       { value: 'date-asc', label: 'Oldest First' },
     ];
 
-    /* ───────────────── Theme Definitions ───────────────── */
+    /* ───────────────── Theme ───────────────── */
 
-    /* Enhanced SVG backgrounds for embossed and vineyard themes */
+    const DOURO_BG = 'radial-gradient(ellipse 80% 60% at 50% 40%, rgba(122, 18, 64, 0.3) 0%, transparent 70%), url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 1200 900\'%3E%3Cdefs%3E%3Cstyle%3Epath%7Bfill:none;stroke:%23e8a0c0;stroke-linecap:round%7D%3C/style%3E%3C/defs%3E%3Cg opacity=\'0.06\'%3E%3Cpath d=\'M-20 80 Q150 40 300 90 T600 70 T900 100 T1220 60\' stroke-width=\'1.2\'/%3E%3Cpath d=\'M-20 130 Q180 95 350 140 T650 115 T950 150 T1220 110\' stroke-width=\'1\'/%3E%3Cpath d=\'M-20 185 Q120 155 280 190 T580 170 T880 200 T1220 165\' stroke-width=\'1.3\'/%3E%3Cpath d=\'M-20 240 Q200 210 380 245 T700 225 T980 255 T1220 220\' stroke-width=\'0.8\'/%3E%3Cpath d=\'M-20 295 Q160 270 320 300 T640 280 T940 310 T1220 275\' stroke-width=\'1.1\'/%3E%3Cpath d=\'M-20 350 Q140 325 310 355 T620 340 T920 365 T1220 335\' stroke-width=\'1\'/%3E%3Cpath d=\'M-20 410 Q190 385 370 415 T680 395 T960 420 T1220 390\' stroke-width=\'1.2\'/%3E%3Cpath d=\'M-20 465 Q130 445 290 470 T590 455 T890 475 T1220 450\' stroke-width=\'0.9\'/%3E%3Cpath d=\'M-20 520 Q170 500 340 525 T660 510 T940 535 T1220 505\' stroke-width=\'1.1\'/%3E%3Cpath d=\'M-20 580 Q210 560 400 585 T720 565 T1000 590 T1220 565\' stroke-width=\'1\'/%3E%3Cpath d=\'M-20 635 Q150 620 310 640 T610 625 T910 645 T1220 620\' stroke-width=\'1.3\'/%3E%3Cpath d=\'M-20 690 Q180 675 360 695 T670 680 T960 700 T1220 680\' stroke-width=\'0.8\'/%3E%3Cpath d=\'M-20 750 Q140 735 300 755 T600 740 T900 760 T1220 740\' stroke-width=\'1\'/%3E%3Cpath d=\'M-20 810 Q200 795 380 815 T700 800 T980 820 T1220 800\' stroke-width=\'1.1\'/%3E%3Cpath d=\'M-20 865 Q160 855 330 870 T640 860 T940 875 T1220 855\' stroke-width=\'0.9\'/%3E%3Cpath d=\'M-20 200 Q100 230 250 180 T500 220 T750 170 T1000 210 T1220 190\' stroke-width=\'2\' opacity=\'0.7\'/%3E%3Cpath d=\'M-20 210 Q110 240 260 195 T510 235 T760 185 T1010 225 T1220 200\' stroke-width=\'1.5\' opacity=\'0.5\'/%3E%3Cpath d=\'M200 300 Q280 280 360 310 T520 290 T680 320\' stroke-width=\'0.7\'/%3E%3Cpath d=\'M200 315 Q280 298 360 325 T520 308 T680 335\' stroke-width=\'0.7\'/%3E%3Cpath d=\'M200 330 Q280 316 360 340 T520 326 T680 350\' stroke-width=\'0.7\'/%3E%3Cpath d=\'M600 500 Q700 480 800 510 T1000 490 T1150 520\' stroke-width=\'0.7\'/%3E%3Cpath d=\'M600 515 Q700 498 800 525 T1000 508 T1150 535\' stroke-width=\'0.7\'/%3E%3Cpath d=\'M600 530 Q700 516 800 540 T1000 526 T1150 550\' stroke-width=\'0.7\'/%3E%3Ccircle cx=\'350\' cy=\'310\' r=\'3\' fill=\'%23e8a0c0\' stroke=\'none\' opacity=\'0.4\'/%3E%3Ccircle cx=\'750\' cy=\'180\' r=\'3\' fill=\'%23e8a0c0\' stroke=\'none\' opacity=\'0.4\'/%3E%3Ccircle cx=\'900\' cy=\'520\' r=\'3\' fill=\'%23e8a0c0\' stroke=\'none\' opacity=\'0.4\'/%3E%3C/g%3E%3C/svg%3E")';
 
-    const SVG_EMBOSSED = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="600" height="600">
-<defs>
-<pattern id="lg" width="6" height="6" patternUnits="userSpaceOnUse">
-<rect width="6" height="6" fill="#1a0a10"/>
-<rect x="0" y="0" width="2" height="1" fill="#231018" opacity="0.7"/>
-<rect x="3" y="2" width="2" height="1" fill="#150812" opacity="0.6"/>
-<rect x="1" y="4" width="2" height="1" fill="#1e0c14" opacity="0.5"/>
-<rect x="4" y="5" width="1" height="1" fill="#221018" opacity="0.55"/>
-<rect x="5" y="1" width="1" height="1" fill="#1c0e13" opacity="0.45"/>
-<rect x="0" y="3" width="1" height="2" fill="#1f0f15" opacity="0.35"/>
-</pattern>
-<filter id="em" x="-30%" y="-30%" width="160%" height="160%">
-<feGaussianBlur in="SourceAlpha" stdDeviation="5" result="b"/>
-<feOffset in="b" dx="-3" dy="-3" result="lo"/>
-<feOffset in="b" dx="3" dy="3" result="do"/>
-<feFlood flood-color="#e8a0c0" flood-opacity="0.28" result="lc"/>
-<feFlood flood-color="#000000" flood-opacity="0.55" result="dc"/>
-<feComposite in="lc" in2="lo" operator="in" result="l"/>
-<feComposite in="dc" in2="do" operator="in" result="d"/>
-<feMerge><feMergeNode in="l"/><feMergeNode in="d"/></feMerge>
-</filter>
-<filter id="de" x="-30%" y="-30%" width="160%" height="160%">
-<feGaussianBlur in="SourceAlpha" stdDeviation="4" result="b"/>
-<feOffset dx="2.5" dy="2.5" result="lo"/>
-<feFlood flood-color="#e8a0c0" flood-opacity="0.18"/>
-<feComposite in2="lo" operator="in" result="ls"/>
-<feOffset in="b" dx="-2.5" dy="-2.5" result="dof"/>
-<feFlood flood-color="#000" flood-opacity="0.45"/>
-<feComposite in2="dof" operator="in" result="ds"/>
-<feMerge><feMergeNode in="ls"/><feMergeNode in="ds"/><feMergeNode in="SourceGraphic"/></feMerge>
-</filter>
-</defs>
-<rect width="600" height="600" fill="url(#lg)"/>
-<rect x="26" y="26" width="548" height="548" rx="8" fill="none" stroke="#e8a0c0" stroke-width="1.8" opacity="0.14" filter="url(#em)"/>
-<rect x="38" y="38" width="524" height="524" rx="6" fill="none" stroke="#e8a0c0" stroke-width="1" opacity="0.10" filter="url(#em)"/>
-<rect x="48" y="48" width="504" height="504" rx="4" fill="none" stroke="#e8a0c0" stroke-width="0.6" opacity="0.07" filter="url(#em)"/>
-<g transform="translate(90,100) scale(0.74)" filter="url(#em)">
-<path d="M80 200 C85 155 120 118 172 96 C212 78 260 68 308 64 C348 60 388 60 425 65 C472 72 515 90 548 115 C578 138 602 170 618 208 C630 238 638 275 640 312 C641 342 636 378 622 408 C606 445 580 476 548 500 C516 522 478 536 436 544 C390 553 340 555 294 550 C248 544 204 530 168 508 C134 486 106 456 86 420 C66 384 54 344 50 304 C46 268 50 236 60 210 Z" fill="#e8a0c0" opacity="0.10"/>
-<path d="M80 200 C85 155 120 118 172 96 C212 78 260 68 308 64 C348 60 388 60 425 65 C472 72 515 90 548 115 C578 138 602 170 618 208 C630 238 638 275 640 312 C641 342 636 378 622 408 C606 445 580 476 548 500 C516 522 478 536 436 544 C390 553 340 555 294 550 C248 544 204 530 168 508 C134 486 106 456 86 420 C66 384 54 344 50 304 C46 268 50 236 60 210 Z" fill="none" stroke="#e8a0c0" stroke-width="3" opacity="0.20"/>
-</g>
-<g transform="translate(90,100) scale(0.74)" filter="url(#de)">
-<path d="M60 290 Q135 255 225 282 T400 256 T560 288 T650 265" fill="none" stroke="#e8a0c0" stroke-width="5" opacity="0.16" stroke-linecap="round"/>
-<path d="M75 308 Q148 278 235 300 T408 278 T565 304" fill="none" stroke="#e8a0c0" stroke-width="2.8" opacity="0.10" stroke-linecap="round"/>
-</g>
-<g transform="translate(90,100) scale(0.74)" filter="url(#em)">
-<path d="M145 155 Q275 130 415 152 T625 138" fill="none" stroke="#e8a0c0" stroke-width="1.4" opacity="0.10"/>
-<path d="M130 185 Q265 162 405 183 T620 170" fill="none" stroke="#e8a0c0" stroke-width="1.1" opacity="0.08"/>
-<path d="M120 215 Q260 195 400 214 T615 202" fill="none" stroke="#e8a0c0" stroke-width="0.9" opacity="0.06"/>
-<path d="M115 340 Q255 318 400 338 T620 325" fill="none" stroke="#e8a0c0" stroke-width="1.4" opacity="0.10"/>
-<path d="M135 368 Q270 348 408 366 T615 354" fill="none" stroke="#e8a0c0" stroke-width="1.1" opacity="0.08"/>
-<path d="M160 410 Q295 392 430 408 T610 398" fill="none" stroke="#e8a0c0" stroke-width="1.4" opacity="0.09"/>
-<path d="M180 438 Q310 422 440 436 T605 426" fill="none" stroke="#e8a0c0" stroke-width="0.9" opacity="0.06"/>
-<path d="M200 462 Q325 448 445 460 T600 452" fill="none" stroke="#e8a0c0" stroke-width="0.7" opacity="0.05"/>
-</g>
-<g opacity="0.16" filter="url(#em)">
-<path d="M40 40 Q40 68 55 83" fill="none" stroke="#e8a0c0" stroke-width="1.3"/>
-<path d="M40 40 Q68 40 83 55" fill="none" stroke="#e8a0c0" stroke-width="1.3"/>
-<path d="M50 50 Q50 70 62 78" fill="none" stroke="#e8a0c0" stroke-width="0.8"/>
-<path d="M50 50 Q70 50 78 62" fill="none" stroke="#e8a0c0" stroke-width="0.8"/>
-<circle cx="52" cy="52" r="2.5" fill="#e8a0c0" opacity="0.6"/>
-<path d="M560 40 Q560 68 545 83" fill="none" stroke="#e8a0c0" stroke-width="1.3"/>
-<path d="M560 40 Q532 40 517 55" fill="none" stroke="#e8a0c0" stroke-width="1.3"/>
-<path d="M550 50 Q550 70 538 78" fill="none" stroke="#e8a0c0" stroke-width="0.8"/>
-<path d="M550 50 Q530 50 522 62" fill="none" stroke="#e8a0c0" stroke-width="0.8"/>
-<circle cx="548" cy="52" r="2.5" fill="#e8a0c0" opacity="0.6"/>
-<path d="M40 560 Q40 532 55 517" fill="none" stroke="#e8a0c0" stroke-width="1.3"/>
-<path d="M40 560 Q68 560 83 545" fill="none" stroke="#e8a0c0" stroke-width="1.3"/>
-<path d="M50 550 Q50 530 62 522" fill="none" stroke="#e8a0c0" stroke-width="0.8"/>
-<path d="M50 550 Q70 550 78 538" fill="none" stroke="#e8a0c0" stroke-width="0.8"/>
-<circle cx="52" cy="548" r="2.5" fill="#e8a0c0" opacity="0.6"/>
-<path d="M560 560 Q560 532 545 517" fill="none" stroke="#e8a0c0" stroke-width="1.3"/>
-<path d="M560 560 Q532 560 517 545" fill="none" stroke="#e8a0c0" stroke-width="1.3"/>
-<path d="M550 550 Q550 530 538 522" fill="none" stroke="#e8a0c0" stroke-width="0.8"/>
-<path d="M550 550 Q530 550 522 538" fill="none" stroke="#e8a0c0" stroke-width="0.8"/>
-<circle cx="548" cy="548" r="2.5" fill="#e8a0c0" opacity="0.6"/>
-</g>
-<g filter="url(#em)" opacity="0.08">
-<line x1="120" y1="36" x2="480" y2="36" stroke="#e8a0c0" stroke-width="0.5"/>
-<line x1="120" y1="564" x2="480" y2="564" stroke="#e8a0c0" stroke-width="0.5"/>
-<line x1="36" y1="120" x2="36" y2="480" stroke="#e8a0c0" stroke-width="0.5"/>
-<line x1="564" y1="120" x2="564" y2="480" stroke="#e8a0c0" stroke-width="0.5"/>
-</g>
-</svg>`;
-
-    const SVG_VINEYARD = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240">
-<defs><style>path,circle,ellipse,line{fill:none;stroke:#e8a0c0;stroke-linecap:round;stroke-linejoin:round}</style></defs>
-<g opacity="0.14">
-<path d="M120 0 Q114 30 120 58 Q127 86 115 114 Q105 142 118 170 Q130 198 120 228 L120 240" stroke-width="2"/>
-<path d="M92 72 Q76 54 66 42 Q62 50 54 46 Q65 64 76 78 Q66 84 56 80 Q68 98 86 94 Q78 106 72 116 Q88 108 100 96 Q108 102 118 98 Q108 90 104 80 Q114 74 118 64 Q104 68 92 72 Z" stroke-width="1" fill="#e8a0c0" fill-opacity="0.18"/>
-<path d="M92 72 L76 56" stroke-width="0.6" opacity="0.8"/>
-<path d="M92 72 L64 76" stroke-width="0.6" opacity="0.8"/>
-<path d="M92 72 L80 98" stroke-width="0.6" opacity="0.8"/>
-<path d="M92 72 L108 88" stroke-width="0.6" opacity="0.8"/>
-<path d="M92 72 L110 62" stroke-width="0.6" opacity="0.8"/>
-<path d="M92 72 Q106 66 116 60 Q120 54 120 46" stroke-width="0.9"/>
-<circle cx="140" cy="84" r="5" fill="#e8a0c0" fill-opacity="0.22" stroke-width="0.7"/>
-<circle cx="150" cy="80" r="5" fill="#e8a0c0" fill-opacity="0.22" stroke-width="0.7"/>
-<circle cx="145" cy="94" r="5" fill="#e8a0c0" fill-opacity="0.22" stroke-width="0.7"/>
-<circle cx="155" cy="90" r="4.5" fill="#e8a0c0" fill-opacity="0.20" stroke-width="0.7"/>
-<circle cx="135" cy="93" r="4.5" fill="#e8a0c0" fill-opacity="0.20" stroke-width="0.7"/>
-<circle cx="141" cy="104" r="4.5" fill="#e8a0c0" fill-opacity="0.20" stroke-width="0.6"/>
-<circle cx="151" cy="100" r="4" fill="#e8a0c0" fill-opacity="0.18" stroke-width="0.6"/>
-<circle cx="146" cy="112" r="3.8" fill="#e8a0c0" fill-opacity="0.16" stroke-width="0.5"/>
-<circle cx="138" cy="112" r="3.5" fill="#e8a0c0" fill-opacity="0.14" stroke-width="0.5"/>
-<path d="M146 74 Q138 66 126 64 Q122 70 120 76" stroke-width="0.8"/>
-<path d="M120 36 Q134 28 142 36 Q148 46 140 54 Q132 58 128 48" stroke-width="0.8"/>
-<path d="M128 48 Q126 44 130 42" stroke-width="0.5"/>
-<path d="M120 128 Q104 120 96 128 Q90 140 100 148 Q110 152 114 142" stroke-width="0.8"/>
-<path d="M114 142 Q116 136 110 136" stroke-width="0.5"/>
-<path d="M152 160 Q166 146 174 134 Q178 142 184 140 Q176 156 164 168 Q174 172 180 168 Q170 182 156 178 Q162 186 166 196 Q152 188 146 176 Q138 180 128 178 Q138 170 142 162 Q134 158 130 148 Q144 154 152 160 Z" stroke-width="0.9" fill="#e8a0c0" fill-opacity="0.14"/>
-<path d="M152 160 L168 146" stroke-width="0.5" opacity="0.7"/>
-<path d="M152 160 L174 164" stroke-width="0.5" opacity="0.7"/>
-<path d="M152 160 L160 180" stroke-width="0.5" opacity="0.7"/>
-<path d="M152 160 L138 170" stroke-width="0.5" opacity="0.7"/>
-<path d="M152 160 Q140 152 128 150 Q122 144 120 136" stroke-width="0.8"/>
-<circle cx="84" cy="170" r="4.2" fill="#e8a0c0" fill-opacity="0.20" stroke-width="0.6"/>
-<circle cx="94" cy="166" r="4.2" fill="#e8a0c0" fill-opacity="0.20" stroke-width="0.6"/>
-<circle cx="78" cy="178" r="4" fill="#e8a0c0" fill-opacity="0.18" stroke-width="0.6"/>
-<circle cx="89" cy="178" r="4" fill="#e8a0c0" fill-opacity="0.18" stroke-width="0.6"/>
-<circle cx="84" cy="186" r="3.5" fill="#e8a0c0" fill-opacity="0.16" stroke-width="0.5"/>
-<circle cx="76" cy="184" r="3" fill="#e8a0c0" fill-opacity="0.14" stroke-width="0.5"/>
-<path d="M94 160 Q104 154 112 158 Q118 166 120 174" stroke-width="0.7"/>
-<path d="M120 120 Q78 112 46 124 Q24 134 0 126" stroke-width="1.4"/>
-<path d="M120 120 Q162 112 194 124 Q216 134 240 126" stroke-width="1.4"/>
-<path d="M8 8 L20 0 L32 8 L20 16 Z" stroke-width="0.7" opacity="0.6"/>
-<path d="M208 8 L220 0 L232 8 L220 16 Z" stroke-width="0.7" opacity="0.6"/>
-<path d="M8 232 L20 240 L32 232 L20 224 Z" stroke-width="0.7" opacity="0.6"/>
-<path d="M208 232 L220 240 L232 232 L220 224 Z" stroke-width="0.7" opacity="0.6"/>
-<circle cx="120" cy="2" r="2" fill="#e8a0c0" stroke="none" opacity="0.5"/>
-<circle cx="120" cy="238" r="2" fill="#e8a0c0" stroke="none" opacity="0.5"/>
-<circle cx="2" cy="120" r="2" fill="#e8a0c0" stroke="none" opacity="0.5"/>
-<circle cx="238" cy="120" r="2" fill="#e8a0c0" stroke="none" opacity="0.5"/>
-<path d="M120 8 Q138 2 144 14 Q148 26 138 32 Q128 30 132 18" stroke-width="0.7"/>
-<path d="M60 120 Q54 108 42 106 Q36 112 38 122" stroke-width="0.6"/>
-<path d="M180 120 Q186 108 198 106 Q204 112 202 122" stroke-width="0.6"/>
-</g>
-</svg>`;
-
-    const THEMES = [
-      {
-        id: 'douro',
-        name: 'Douro Valley',
-        desc: 'Topographic contour watermark',
-        bg: 'radial-gradient(ellipse 80% 60% at 50% 40%, rgba(122, 18, 64, 0.3) 0%, transparent 70%), url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 1200 900\'%3E%3Cdefs%3E%3Cstyle%3Epath%7Bfill:none;stroke:%23e8a0c0;stroke-linecap:round%7D%3C/style%3E%3C/defs%3E%3Cg opacity=\'0.06\'%3E%3Cpath d=\'M-20 80 Q150 40 300 90 T600 70 T900 100 T1220 60\' stroke-width=\'1.2\'/%3E%3Cpath d=\'M-20 130 Q180 95 350 140 T650 115 T950 150 T1220 110\' stroke-width=\'1\'/%3E%3Cpath d=\'M-20 185 Q120 155 280 190 T580 170 T880 200 T1220 165\' stroke-width=\'1.3\'/%3E%3Cpath d=\'M-20 240 Q200 210 380 245 T700 225 T980 255 T1220 220\' stroke-width=\'0.8\'/%3E%3Cpath d=\'M-20 295 Q160 270 320 300 T640 280 T940 310 T1220 275\' stroke-width=\'1.1\'/%3E%3Cpath d=\'M-20 350 Q140 325 310 355 T620 340 T920 365 T1220 335\' stroke-width=\'1\'/%3E%3Cpath d=\'M-20 410 Q190 385 370 415 T680 395 T960 420 T1220 390\' stroke-width=\'1.2\'/%3E%3Cpath d=\'M-20 465 Q130 445 290 470 T590 455 T890 475 T1220 450\' stroke-width=\'0.9\'/%3E%3Cpath d=\'M-20 520 Q170 500 340 525 T660 510 T940 535 T1220 505\' stroke-width=\'1.1\'/%3E%3Cpath d=\'M-20 580 Q210 560 400 585 T720 565 T1000 590 T1220 565\' stroke-width=\'1\'/%3E%3Cpath d=\'M-20 635 Q150 620 310 640 T610 625 T910 645 T1220 620\' stroke-width=\'1.3\'/%3E%3Cpath d=\'M-20 690 Q180 675 360 695 T670 680 T960 700 T1220 680\' stroke-width=\'0.8\'/%3E%3Cpath d=\'M-20 750 Q140 735 300 755 T600 740 T900 760 T1220 740\' stroke-width=\'1\'/%3E%3Cpath d=\'M-20 810 Q200 795 380 815 T700 800 T980 820 T1220 800\' stroke-width=\'1.1\'/%3E%3Cpath d=\'M-20 865 Q160 855 330 870 T640 860 T940 875 T1220 855\' stroke-width=\'0.9\'/%3E%3Cpath d=\'M-20 200 Q100 230 250 180 T500 220 T750 170 T1000 210 T1220 190\' stroke-width=\'2\' opacity=\'0.7\'/%3E%3Cpath d=\'M-20 210 Q110 240 260 195 T510 235 T760 185 T1010 225 T1220 200\' stroke-width=\'1.5\' opacity=\'0.5\'/%3E%3Cpath d=\'M200 300 Q280 280 360 310 T520 290 T680 320\' stroke-width=\'0.7\'/%3E%3Cpath d=\'M200 315 Q280 298 360 325 T520 308 T680 335\' stroke-width=\'0.7\'/%3E%3Cpath d=\'M200 330 Q280 316 360 340 T520 326 T680 350\' stroke-width=\'0.7\'/%3E%3Cpath d=\'M600 500 Q700 480 800 510 T1000 490 T1150 520\' stroke-width=\'0.7\'/%3E%3Cpath d=\'M600 515 Q700 498 800 525 T1000 508 T1150 535\' stroke-width=\'0.7\'/%3E%3Cpath d=\'M600 530 Q700 516 800 540 T1000 526 T1150 550\' stroke-width=\'0.7\'/%3E%3Ccircle cx=\'350\' cy=\'310\' r=\'3\' fill=\'%23e8a0c0\' stroke=\'none\' opacity=\'0.4\'/%3E%3Ccircle cx=\'750\' cy=\'180\' r=\'3\' fill=\'%23e8a0c0\' stroke=\'none\' opacity=\'0.4\'/%3E%3Ccircle cx=\'900\' cy=\'520\' r=\'3\' fill=\'%23e8a0c0\' stroke=\'none\' opacity=\'0.4\'/%3E%3C/g%3E%3C/svg%3E")',
-        bgSize: 'cover',
-        bgPos: 'center',
-        bgRepeat: 'no-repeat',
-        bgAttach: 'scroll',
-        overlay: null,
-      },
-      {
-        id: 'embossed',
-        name: 'Embossed Region',
-        desc: 'Debossed leather journal',
-        bg: 'radial-gradient(ellipse 90% 70% at 50% 45%, rgba(92, 14, 48, 0.25) 0%, transparent 60%), url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 600 600\' width=\'600\' height=\'600\'%3E%3Cdefs%3E%3Cpattern id=\'leather\' width=\'4\' height=\'4\' patternUnits=\'userSpaceOnUse\'%3E%3Crect width=\'4\' height=\'4\' fill=\'%231a0a10\'/%3E%3Crect x=\'0\' y=\'0\' width=\'1\' height=\'1\' fill=\'%23200d14\' opacity=\'0.5\'/%3E%3Crect x=\'2\' y=\'2\' width=\'1\' height=\'1\' fill=\'%23150812\' opacity=\'0.4\'/%3E%3Crect x=\'1\' y=\'3\' width=\'1\' height=\'1\' fill=\'%231d0b12\' opacity=\'0.3\'/%3E%3Crect x=\'3\' y=\'1\' width=\'1\' height=\'1\' fill=\'%23180a10\' opacity=\'0.35\'/%3E%3C/pattern%3E%3Cfilter id=\'emboss\'%3E%3CfeGaussianBlur in=\'SourceAlpha\' stdDeviation=\'3\' result=\'blur\'/%3E%3CfeOffset in=\'blur\' dx=\'-1.5\' dy=\'-1.5\' result=\'lightOffset\'/%3E%3CfeOffset in=\'blur\' dx=\'1.5\' dy=\'1.5\' result=\'darkOffset\'/%3E%3CfeFlood flood-color=\'%23e8a0c0\' flood-opacity=\'0.07\' result=\'lightColor\'/%3E%3CfeFlood flood-color=\'%23000000\' flood-opacity=\'0.2\' result=\'darkColor\'/%3E%3CfeComposite in=\'lightColor\' in2=\'lightOffset\' operator=\'in\' result=\'light\'/%3E%3CfeComposite in=\'darkColor\' in2=\'darkOffset\' operator=\'in\' result=\'dark\'/%3E%3CfeMerge%3E%3CfeMergeNode in=\'light\'/%3E%3CfeMergeNode in=\'dark\'/%3E%3C/feMerge%3E%3C/filter%3E%3Cfilter id=\'inner\'%3E%3CfeGaussianBlur in=\'SourceAlpha\' stdDeviation=\'2\' result=\'b\'/%3E%3CfeOffset dx=\'1\' dy=\'1\' result=\'lo\'/%3E%3CfeFlood flood-color=\'%23e8a0c0\' flood-opacity=\'0.04\'/%3E%3CfeComposite in2=\'lo\' operator=\'in\' result=\'ls\'/%3E%3CfeOffset in=\'b\' dx=\'-1\' dy=\'-1\' result=\'do\'/%3E%3CfeFlood flood-color=\'%23000\' flood-opacity=\'0.15\'/%3E%3CfeComposite in2=\'do\' operator=\'in\' result=\'ds\'/%3E%3CfeMerge%3E%3CfeMergeNode in=\'ls\'/%3E%3CfeMergeNode in=\'ds\'/%3E%3CfeMergeNode in=\'SourceGraphic\'/%3E%3C/feMerge%3E%3C/filter%3E%3C/defs%3E%3Crect width=\'600\' height=\'600\' fill=\'url(%23leather)\'/%3E%3Crect x=\'40\' y=\'40\' width=\'520\' height=\'520\' rx=\'6\' fill=\'none\' stroke=\'%23e8a0c0\' stroke-width=\'0.5\' opacity=\'0.06\' filter=\'url(%23emboss)\'/%3E%3Crect x=\'50\' y=\'50\' width=\'500\' height=\'500\' rx=\'4\' fill=\'none\' stroke=\'%23e8a0c0\' stroke-width=\'0.3\' opacity=\'0.04\' filter=\'url(%23emboss)\'/%3E%3Cg transform=\'translate(120,140) scale(0.6)\' filter=\'url(%23emboss)\'%3E%3Cpath d=\'M80 200 C90 170 120 140 170 120 C200 108 240 100 280 95 C310 91 340 90 370 92 C410 95 450 105 480 120 C510 135 530 155 550 180 C565 200 575 225 580 250 C584 270 582 295 575 315 C565 340 548 360 525 375 C500 390 470 400 440 405 C400 412 360 415 320 412 C280 409 245 400 215 385 C185 370 160 350 140 325 C120 300 105 272 95 245 C85 220 78 218 80 200 Z\' fill=\'%23e8a0c0\' opacity=\'0.03\'/%3E%3C/g%3E%3Cg transform=\'translate(120,140) scale(0.6)\' filter=\'url(%23inner)\'%3E%3Cpath d=\'M100 240 Q150 220 200 235 T310 215 T420 240 T530 220 T570 250\' fill=\'none\' stroke=\'%23e8a0c0\' stroke-width=\'2.5\' opacity=\'0.04\' stroke-linecap=\'round\'/%3E%3C/g%3E%3Cg transform=\'translate(120,140) scale(0.6)\' opacity=\'0.025\'%3E%3Cpath d=\'M160 180 Q250 160 340 175 T520 165\' fill=\'none\' stroke=\'%23e8a0c0\' stroke-width=\'1\' filter=\'url(%23emboss)\'/%3E%3Cpath d=\'M140 280 Q240 260 340 275 T540 265\' fill=\'none\' stroke=\'%23e8a0c0\' stroke-width=\'1\' filter=\'url(%23emboss)\'/%3E%3Cpath d=\'M170 340 Q270 320 370 335 T520 325\' fill=\'none\' stroke=\'%23e8a0c0\' stroke-width=\'1\' filter=\'url(%23emboss)\'/%3E%3C/g%3E%3Cg opacity=\'0.04\' filter=\'url(%23emboss)\'%3E%3Cpath d=\'M60 60 Q60 80 70 90 Q80 80 90 60\' fill=\'none\' stroke=\'%23e8a0c0\' stroke-width=\'1\'/%3E%3Cpath d=\'M540 60 Q540 80 530 90 Q520 80 510 60\' fill=\'none\' stroke=\'%23e8a0c0\' stroke-width=\'1\'/%3E%3Cpath d=\'M60 540 Q60 520 70 510 Q80 520 90 540\' fill=\'none\' stroke=\'%23e8a0c0\' stroke-width=\'1\'/%3E%3Cpath d=\'M540 540 Q540 520 530 510 Q520 520 510 540\' fill=\'none\' stroke=\'%23e8a0c0\' stroke-width=\'1\'/%3E%3C/g%3E%3C/svg%3E")',
-        bgSize: '600px 600px',
-        bgPos: 'center',
-        bgRepeat: 'repeat',
-        bgAttach: 'scroll',
-        overlay: 'radial-gradient(circle at 30% 30%, rgba(122, 18, 64, 0.15) 0%, transparent 50%), radial-gradient(circle at 70% 70%, rgba(61, 9, 32, 0.2) 0%, transparent 50%)',
-      },
-      {
-        id: 'vineyard',
-        name: 'Vineyard Pattern',
-        desc: 'Grape vine damask pattern',
-        bg: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 200 200\' width=\'200\' height=\'200\'%3E%3Cdefs%3E%3Cstyle%3Epath,circle,line,ellipse%7Bfill:none;stroke:%23e8a0c0;stroke-linecap:round%7D%3C/style%3E%3C/defs%3E%3Cg opacity=\'0.10\'%3E%3Cline x1=\'-10\' y1=\'50\' x2=\'50\' y2=\'-10\' stroke-width=\'0.5\' opacity=\'0.6\'/%3E%3Cline x1=\'10\' y1=\'70\' x2=\'70\' y2=\'10\' stroke-width=\'0.5\' opacity=\'0.6\'/%3E%3Cline x1=\'30\' y1=\'90\' x2=\'90\' y2=\'30\' stroke-width=\'0.5\' opacity=\'0.6\'/%3E%3Cline x1=\'50\' y1=\'110\' x2=\'110\' y2=\'50\' stroke-width=\'0.5\' opacity=\'0.6\'/%3E%3Cline x1=\'70\' y1=\'130\' x2=\'130\' y2=\'70\' stroke-width=\'0.5\' opacity=\'0.6\'/%3E%3Cline x1=\'90\' y1=\'150\' x2=\'150\' y2=\'90\' stroke-width=\'0.5\' opacity=\'0.6\'/%3E%3Cline x1=\'110\' y1=\'170\' x2=\'170\' y2=\'110\' stroke-width=\'0.5\' opacity=\'0.6\'/%3E%3Cline x1=\'130\' y1=\'190\' x2=\'190\' y2=\'130\' stroke-width=\'0.5\' opacity=\'0.6\'/%3E%3Cline x1=\'150\' y1=\'210\' x2=\'210\' y2=\'150\' stroke-width=\'0.5\' opacity=\'0.6\'/%3E%3Cpath d=\'M25 55 Q32 48 28 40 Q24 32 32 28\' stroke-width=\'0.7\' opacity=\'0.8\'/%3E%3Cpath d=\'M65 75 Q72 68 68 60 Q64 52 72 48\' stroke-width=\'0.7\' opacity=\'0.8\'/%3E%3Cpath d=\'M105 95 Q112 88 108 80 Q104 72 112 68\' stroke-width=\'0.7\' opacity=\'0.8\'/%3E%3Cpath d=\'M145 115 Q152 108 148 100 Q144 92 152 88\' stroke-width=\'0.7\' opacity=\'0.8\'/%3E%3Cg opacity=\'0.7\'%3E%3Ccircle cx=\'40\' cy=\'38\' r=\'2\' fill=\'%23e8a0c0\' stroke=\'none\'/%3E%3Ccircle cx=\'43\' cy=\'41\' r=\'2\' fill=\'%23e8a0c0\' stroke=\'none\'/%3E%3Ccircle cx=\'37\' cy=\'41\' r=\'2\' fill=\'%23e8a0c0\' stroke=\'none\'/%3E%3Ccircle cx=\'40\' cy=\'44\' r=\'1.8\' fill=\'%23e8a0c0\' stroke=\'none\'/%3E%3C/g%3E%3Cg opacity=\'0.7\'%3E%3Ccircle cx=\'120\' cy=\'78\' r=\'2\' fill=\'%23e8a0c0\' stroke=\'none\'/%3E%3Ccircle cx=\'123\' cy=\'81\' r=\'2\' fill=\'%23e8a0c0\' stroke=\'none\'/%3E%3Ccircle cx=\'117\' cy=\'81\' r=\'2\' fill=\'%23e8a0c0\' stroke=\'none\'/%3E%3Ccircle cx=\'120\' cy=\'84\' r=\'1.8\' fill=\'%23e8a0c0\' stroke=\'none\'/%3E%3C/g%3E%3Cellipse cx=\'30\' cy=\'32\' rx=\'4\' ry=\'2.5\' transform=\'rotate(-30 30 32)\' stroke-width=\'0.5\' opacity=\'0.6\'/%3E%3Cpath d=\'M30 32 L28 35\' stroke-width=\'0.4\' opacity=\'0.5\'/%3E%3Cellipse cx=\'110\' cy=\'72\' rx=\'4\' ry=\'2.5\' transform=\'rotate(-30 110 72)\' stroke-width=\'0.5\' opacity=\'0.6\'/%3E%3Cpath d=\'M110 72 L108 75\' stroke-width=\'0.4\' opacity=\'0.5\'/%3E%3Cpath d=\'M100 100 L104 96 L108 100 L104 104 Z\' stroke-width=\'0.4\' opacity=\'0.3\'/%3E%3C/g%3E%3C/svg%3E")',
-        bgSize: '200px 200px',
-        bgPos: 'center',
-        bgRepeat: 'repeat',
-        bgAttach: 'fixed',
-        overlay: 'radial-gradient(ellipse 100% 80% at 50% 30%, rgba(92, 14, 48, 0.2) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 80% 80%, rgba(61, 9, 32, 0.15) 0%, transparent 50%)',
-      },
-    ];
-
-    const THEME_SVG_OVERRIDES = {
-      embossed: {
-        gradient: 'radial-gradient(ellipse 90% 70% at 50% 45%, rgba(92, 14, 48, 0.35) 0%, transparent 60%), ',
-        svg: SVG_EMBOSSED,
-        overlay: 'radial-gradient(circle at 30% 30%, rgba(122, 18, 64, 0.22) 0%, transparent 50%), radial-gradient(circle at 70% 70%, rgba(61, 9, 32, 0.28) 0%, transparent 50%)',
-      },
-      vineyard: {
-        gradient: '',
-        svg: SVG_VINEYARD,
-        bgSize: '240px 240px',
-        overlay: 'radial-gradient(ellipse 100% 80% at 50% 30%, rgba(92, 14, 48, 0.28) 0%, transparent 60%), radial-gradient(ellipse 60% 40% at 80% 80%, rgba(61, 9, 32, 0.22) 0%, transparent 50%)',
-      },
-    };
-
-    function applyTheme(themeId) {
-      const theme = THEMES.find(t => t.id === themeId) || THEMES[0];
+    (function initTheme() {
       const el = document.getElementById('theme-bg');
-      const ov = document.getElementById('theme-bg-overlay');
       if (!el) return;
-
-      el.classList.remove('active');
-      ov.classList.remove('active');
-
-      let bgVal = theme.bg;
-      let overlayVal = theme.overlay;
-      let bgSize = theme.bgSize;
-      const ovr = THEME_SVG_OVERRIDES[themeId];
-      if (ovr) {
-        bgVal = ovr.gradient + 'url("data:image/svg+xml,' + encodeURIComponent(ovr.svg) + '")';
-        if (ovr.overlay) overlayVal = ovr.overlay;
-        if (ovr.bgSize) bgSize = ovr.bgSize;
-      }
-
-      requestAnimationFrame(() => {
-        el.style.background = bgVal;
-        el.style.backgroundSize = bgSize;
-        el.style.backgroundPosition = theme.bgPos;
-        el.style.backgroundRepeat = theme.bgRepeat;
-        el.style.backgroundAttachment = theme.bgAttach;
-
-        if (overlayVal) {
-          ov.style.background = overlayVal;
-        } else {
-          ov.style.background = 'none';
-        }
-
-        requestAnimationFrame(() => {
-          el.classList.add('active');
-          if (overlayVal) ov.classList.add('active');
-        });
-      });
-    }
-
-    /* ───────────────── Theme Switcher Component ───────────────── */
-
-    function ThemeSwitcher() {
-      const [open, setOpen] = useState(false);
-      const [current, setCurrent] = useState(() => localStorage.getItem('pc_theme') || 'douro');
-      const panelRef = useRef(null);
-
-      useEffect(() => {
-        applyTheme(current);
-      }, []);
-
-      useEffect(() => {
-        if (!open) return;
-        const handler = (e) => {
-          if (panelRef.current && !panelRef.current.contains(e.target)) setOpen(false);
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-      }, [open]);
-
-      const select = (id) => {
-        setCurrent(id);
-        localStorage.setItem('pc_theme', id);
-        applyTheme(id);
-        setOpen(false);
-      };
-
-      return (
-        <div className="relative" ref={panelRef}>
-          <button
-            onClick={() => setOpen(!open)}
-            className="p-2 rounded-lg glass-light text-port-400 hover:text-port-200 transition"
-            title="Switch theme"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zm10 0a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
-            </svg>
-          </button>
-
-          {open && (
-            <div className="absolute right-0 top-full mt-2 w-64 glass rounded-xl p-3 shadow-2xl fade-in z-50">
-              <p className="text-[10px] font-semibold text-port-400 uppercase tracking-wider mb-2 px-1">Background Theme</p>
-              {THEMES.map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => select(t.id)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition mb-1 last:mb-0 ${
-                    current === t.id
-                      ? 'bg-port-700/40 border border-port-500/30'
-                      : 'hover:bg-white/5 border border-transparent'
-                  }`}
-                >
-                  <span className={`flex-shrink-0 w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center ${
-                    current === t.id ? 'border-gold-400' : 'border-port-500'
-                  }`}>
-                    {current === t.id && <span className="w-1.5 h-1.5 rounded-full bg-gold-400" />}
-                  </span>
-                  <span>
-                    <span className={`block text-sm font-medium ${current === t.id ? 'text-port-100' : 'text-port-300'}`}>{t.name}</span>
-                    <span className="block text-[11px] text-port-500">{t.desc}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
+      el.style.background = DOURO_BG;
+      el.style.backgroundSize = 'cover';
+      el.style.backgroundPosition = 'center';
+      el.style.backgroundRepeat = 'no-repeat';
+      el.style.backgroundAttachment = 'scroll';
+      el.classList.add('active');
+    })();
 
     /* ───────────────── Star Rating Component ───────────────── */
 
@@ -1605,29 +1304,63 @@
       );
     }
 
-    /* ───────────────── Export Function ───────────────── */
+    /* ───────────────── Export / Import ───────────────── */
 
     async function exportData() {
-      const ids = (await storage.get('ports:list')) || [];
-      const data = { ports: [], ratings: {}, meetings: [] };
-      for (const id of ids) {
-        const p = await storage.get(`port:${id}`);
-        if (p) data.ports.push(p);
-        const r = await storage.get(`ratings:${id}`);
-        if (r) data.ratings[id] = r;
-      }
+      const portIds = (await storage.get('ports:list')) || [];
       const meetingIds = (await storage.get('meetings:list')) || [];
-      for (const id of meetingIds) {
-        const m = await storage.get(`meeting:${id}`);
-        if (m) data.meetings.push(m);
-      }
+
+      const [ports, ratings, meetings] = await Promise.all([
+        storage.getMulti(portIds.map(id => `port:${id}`)),
+        storage.getMulti(portIds.map(id => `ratings:${id}`)),
+        storage.getMulti(meetingIds.map(id => `meeting:${id}`)),
+      ]);
+
+      const data = {
+        exportDate: new Date().toISOString(),
+        ports: ports.filter(Boolean),
+        ratings: ratings.filter(Boolean),
+        meetings: meetings.filter(Boolean),
+      };
+
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `port-committee-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `port-committee-backup-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
+    }
+
+    async function importData(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          try {
+            const data = JSON.parse(e.target.result);
+            const portIds = [];
+            for (const port of (data.ports || [])) {
+              await storage.set(`port:${port.id}`, port);
+              portIds.push(port.id);
+            }
+            await storage.set('ports:list', portIds);
+            for (const rating of (data.ratings || [])) {
+              await storage.set(`ratings:${rating.portId}`, rating);
+            }
+            const meetingIds = [];
+            for (const meeting of (data.meetings || [])) {
+              await storage.set(`meeting:${meeting.id}`, meeting);
+              meetingIds.push(meeting.id);
+            }
+            await storage.set('meetings:list', meetingIds);
+            resolve(data);
+          } catch (err) {
+            reject(err);
+          }
+        };
+        reader.onerror = reject;
+        reader.readAsText(file);
+      });
     }
 
     /* ───────────────── Main App ───────────────── */
@@ -1741,7 +1474,6 @@
                 <h1 className="font-display text-xl text-port-100 group-hover:text-gold-400 transition leading-tight">Port Committee</h1>
               </button>
               <div className="flex gap-2">
-                <ThemeSwitcher />
                 <button
                   onClick={exportData}
                   className="p-2 rounded-lg glass-light text-port-400 hover:text-port-200 transition"
@@ -1868,6 +1600,11 @@
               </>
             )}
           </main>
+
+          {/* Local storage warning */}
+          <footer className="max-w-5xl mx-auto px-4 py-4 text-center">
+            <p className="text-port-500 text-xs">Local storage only &mdash; data is saved in this browser and not shared between users.</p>
+          </footer>
         </div>
       );
     }
