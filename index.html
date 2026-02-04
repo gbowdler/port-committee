@@ -86,6 +86,72 @@
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
     ::-webkit-scrollbar-thumb { background: rgba(184,57,107,0.4); border-radius: 3px; }
+
+    /* ── Landing page ── */
+    .landing {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(160deg, #1a0505 0%, #2d0a0a 40%, #1f0608 100%);
+      transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .landing.exit {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .landing-contours {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      animation: landingLayer 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.1s forwards;
+    }
+    .landing-headline {
+      opacity: 0;
+      transform: translateY(10px);
+      animation: landingReveal 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.6s forwards;
+    }
+    .landing-sub {
+      opacity: 0;
+      transform: translateY(10px);
+      animation: landingReveal 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) 1.1s forwards;
+    }
+    .landing-btn {
+      opacity: 0;
+      transform: translateY(10px);
+      animation: landingReveal 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) 1.6s forwards;
+    }
+    @keyframes landingLayer {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes landingReveal {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .landing-enter {
+      display: inline-block;
+      padding: 14px 48px;
+      border-radius: 9999px;
+      border: 1px solid rgba(242, 236, 228, 0.18);
+      color: #f2ece4;
+      font-family: 'Inter', sans-serif;
+      font-weight: 300;
+      font-size: 0.9rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      background: transparent;
+      cursor: pointer;
+      box-shadow: 0 0 20px rgba(242, 236, 228, 0.04);
+      transition: border-color 0.4s, box-shadow 0.4s, letter-spacing 0.4s;
+    }
+    .landing-enter:hover {
+      border-color: rgba(242, 236, 228, 0.35);
+      box-shadow: 0 0 30px rgba(242, 236, 228, 0.08);
+      letter-spacing: 0.24em;
+    }
   </style>
 </head>
 <body class="min-h-screen text-port-200">
@@ -1304,6 +1370,68 @@
       );
     }
 
+    /* ───────────────── Landing Page ───────────────── */
+
+    const LANDING_CONTOURS = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" preserveAspectRatio="xMidYMid slice"><defs><style>path{fill:none;stroke:#f2ece4;stroke-linecap:round}</style></defs><g opacity="0.07"><path d="M-20 80 Q150 40 300 90 T600 70 T900 100 T1220 60" stroke-width="1.2"/><path d="M-20 130 Q180 95 350 140 T650 115 T950 150 T1220 110" stroke-width="1"/><path d="M-20 185 Q120 155 280 190 T580 170 T880 200 T1220 165" stroke-width="1.3"/><path d="M-20 240 Q200 210 380 245 T700 225 T980 255 T1220 220" stroke-width="0.8"/><path d="M-20 295 Q160 270 320 300 T640 280 T940 310 T1220 275" stroke-width="1.1"/><path d="M-20 350 Q140 325 310 355 T620 340 T920 365 T1220 335" stroke-width="1"/><path d="M-20 410 Q190 385 370 415 T680 395 T960 420 T1220 390" stroke-width="1.2"/><path d="M-20 465 Q130 445 290 470 T590 455 T890 475 T1220 450" stroke-width="0.9"/><path d="M-20 520 Q170 500 340 525 T660 510 T940 535 T1220 505" stroke-width="1.1"/><path d="M-20 580 Q210 560 400 585 T720 565 T1000 590 T1220 565" stroke-width="1"/><path d="M-20 635 Q150 620 310 640 T610 625 T910 645 T1220 620" stroke-width="1.3"/><path d="M-20 690 Q180 675 360 695 T670 680 T960 700 T1220 680" stroke-width="0.8"/><path d="M-20 750 Q140 735 300 755 T600 740 T900 760 T1220 740" stroke-width="1"/><path d="M-20 810 Q200 795 380 815 T700 800 T980 820 T1220 800" stroke-width="1.1"/><path d="M-20 865 Q160 855 330 870 T640 860 T940 875 T1220 855" stroke-width="0.9"/><path d="M-20 200 Q100 230 250 180 T500 220 T750 170 T1000 210 T1220 190" stroke-width="2" opacity="0.7"/><path d="M-20 210 Q110 240 260 195 T510 235 T760 185 T1010 225 T1220 200" stroke-width="1.5" opacity="0.5"/></g></svg>`;
+
+    function LandingPage({ onEnter }) {
+      const [exiting, setExiting] = useState(false);
+
+      const handleEnter = () => {
+        setExiting(true);
+        setTimeout(onEnter, 800);
+      };
+
+      const contourBg = `url("data:image/svg+xml,${encodeURIComponent(LANDING_CONTOURS)}")`;
+
+      return (
+        <div className={`landing ${exiting ? 'exit' : ''}`}>
+          <div
+            className="landing-contours"
+            style={{
+              background: contourBg,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
+          />
+          <div style={{ position: 'relative', textAlign: 'center', padding: '0 2rem', maxWidth: '520px' }}>
+            <h1
+              className="landing-headline"
+              style={{
+                fontFamily: "'Playfair Display', serif",
+                fontSize: 'clamp(2.4rem, 8vw, 4rem)',
+                fontWeight: 600,
+                color: '#f2ece4',
+                lineHeight: 1.1,
+                marginBottom: '1.2rem',
+              }}
+            >
+              Port Committee
+            </h1>
+            <p
+              className="landing-sub"
+              style={{
+                fontFamily: "'Inter', sans-serif",
+                fontSize: 'clamp(0.85rem, 2.5vw, 1.05rem)',
+                fontWeight: 300,
+                color: 'rgba(242, 236, 228, 0.55)',
+                letterSpacing: '0.12em',
+                lineHeight: 1.7,
+                marginBottom: '3.5rem',
+              }}
+            >
+              A private place for good ports<br />and better opinions.
+            </p>
+            <div className="landing-btn">
+              <button className="landing-enter" onClick={handleEnter}>
+                Enter
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     /* ───────────────── Export / Import ───────────────── */
 
     async function exportData() {
@@ -1609,8 +1737,20 @@
       );
     }
 
+    /* ───────────────── Root Wrapper ───────────────── */
+
+    function Root() {
+      const [entered, setEntered] = useState(false);
+      return (
+        <>
+          {!entered && <LandingPage onEnter={() => setEntered(true)} />}
+          <App />
+        </>
+      );
+    }
+
     /* ───────────────── Mount ───────────────── */
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
   </script>
 </body>
 </html>
