@@ -11,6 +11,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script>
     tailwind.config = {
       theme: {
@@ -243,6 +244,56 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
     const firebaseStorage = firebase.storage();
+    const auth = firebase.auth();
+    auth.useDeviceLanguage();
+
+    /* ───────────────── Phone Auth ───────────────── */
+
+    // Approved Port Committee members (replace with actual numbers)
+    const APPROVED_PHONE_NUMBERS = [
+      '+447123456789',  // Gareth
+      '+447987654321',  // John
+      '+447555123456',  // Sarah
+      '+447777888999',  // Mike
+      '+447444555666',  // Emma
+      '+447222333444',  // Tom
+      '+447999000111',  // Alice
+    ];
+
+    function isPhoneApproved(phoneNumber) {
+      const normalized = phoneNumber.replace(/\s/g, '');
+      return APPROVED_PHONE_NUMBERS.includes(normalized);
+    }
+
+    async function getUserProfile(userId) {
+      try {
+        const doc = await db.collection('portCommittee').doc(`user_profile:${userId}`).get();
+        return doc.exists ? doc.data() : null;
+      } catch (e) {
+        console.error('Error loading user profile:', e);
+        return null;
+      }
+    }
+
+    async function saveUserProfile(userId, name) {
+      await db.collection('portCommittee').doc(`user_profile:${userId}`).set({
+        name,
+        userId,
+        phoneNumber: auth.currentUser?.phoneNumber || '',
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+      });
+    }
+
+    async function updateLastLogin(userId) {
+      try {
+        await db.collection('portCommittee').doc(`user_profile:${userId}`).update({
+          lastLogin: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error('Error updating last login:', e);
+      }
+    }
 
     /* ───────────────── Storage Helpers ───────────────── */
 
@@ -533,12 +584,12 @@
 
     /* ───────────────── Port Detail View ───────────────── */
 
-    function PortDetail({ portId, onBack, onEdit, onDelete, showToast, onNavigateToMeeting }) {
+    function PortDetail({ portId, onBack, onEdit, onDelete, showToast, onNavigateToMeeting, currentUserName }) {
       const [port, setPort] = useState(null);
       const [ratings, setRatings] = useState([]);
       const [portMeetings, setPortMeetings] = useState([]);
       const [loading, setLoading] = useState(true);
-      const [memberName, setMemberName] = useState(() => localStorage.getItem('pc_member') || '');
+      const [memberName, setMemberName] = useState(() => currentUserName || localStorage.getItem('pc_member') || '');
       const [newRating, setNewRating] = useState(0);
       const [newNotes, setNewNotes] = useState('');
       const [submitting, setSubmitting] = useState(false);
@@ -904,8 +955,8 @@
 
     /* ───────────────── Quick Rate Modal ───────────────── */
 
-    function QuickRateModal({ port, onClose, onSaved }) {
-      const [memberName, setMemberName] = useState(() => localStorage.getItem('pc_member') || '');
+    function QuickRateModal({ port, onClose, onSaved, currentUserName }) {
+      const [memberName, setMemberName] = useState(() => currentUserName || localStorage.getItem('pc_member') || '');
       const [rating, setRating] = useState(0);
       const [notes, setNotes] = useState('');
       const [saving, setSaving] = useState(false);
@@ -1071,12 +1122,12 @@
 
     /* ───────────────── Meeting Form ───────────────── */
 
-    function MeetingForm({ meeting, onSave, onCancel }) {
+    function MeetingForm({ meeting, onSave, onCancel, currentUserName }) {
       const isEdit = !!meeting;
       const [form, setForm] = useState({
         date: meeting?.date || '',
         location: meeting?.location || '',
-        host: meeting?.host || localStorage.getItem('pc_member') || '',
+        host: meeting?.host || currentUserName || localStorage.getItem('pc_member') || '',
         status: meeting?.status || 'upcoming',
         notes: meeting?.notes || '',
       });
@@ -1325,14 +1376,14 @@
       );
     }
 
-    function MeetingDetail({ meetingId, onBack, onEdit, showToast, onNavigateToPort }) {
+    function MeetingDetail({ meetingId, onBack, onEdit, showToast, onNavigateToPort, currentUserName }) {
       const [meeting, setMeeting] = useState(null);
       const [loading, setLoading] = useState(true);
       const [showConfirm, setShowConfirm] = useState(false);
       const [showPortPicker, setShowPortPicker] = useState(false);
       const [linkedPorts, setLinkedPorts] = useState([]);
       // RSVP form
-      const [rsvpName, setRsvpName] = useState(() => localStorage.getItem('pc_member') || '');
+      const [rsvpName, setRsvpName] = useState(() => currentUserName || localStorage.getItem('pc_member') || '');
       const [rsvpStatus, setRsvpStatus] = useState('yes');
       const [rsvpBringing, setRsvpBringing] = useState('');
       const [rsvpErrors, setRsvpErrors] = useState({});
@@ -1440,7 +1491,7 @@
           const processed = await compressImageFile(file);
 
           showToast('Uploading file...');
-          const uploaderName = localStorage.getItem('pc_member') || 'Unknown';
+          const uploaderName = currentUserName || localStorage.getItem('pc_member') || 'Unknown';
           const timestamp = Date.now();
           const storagePath = `meetings/${meetingId}/${timestamp}_${processed.name}`;
           const fileRef = firebaseStorage.ref().child(storagePath);
@@ -1752,6 +1803,194 @@
       );
     }
 
+    /* ───────────────── Phone Login Screen ───────────────── */
+
+    function PhoneLoginScreen({ onLoginSuccess }) {
+      const [step, setStep] = useState('phone'); // 'phone' | 'code' | 'name'
+      const [phoneNumber, setPhoneNumber] = useState('');
+      const [verificationCode, setVerificationCode] = useState('');
+      const [userName, setUserName] = useState('');
+      const [error, setError] = useState('');
+      const [loading, setLoading] = useState(false);
+      const [confirmationResult, setConfirmationResult] = useState(null);
+
+      // If already authenticated (e.g. page refreshed during name step), jump to name
+      useEffect(() => {
+        if (auth.currentUser) setStep('name');
+      }, []);
+
+      const sendCode = async () => {
+        setError('');
+        setLoading(true);
+        try {
+          const normalized = phoneNumber.replace(/\s/g, '');
+          if (!normalized.startsWith('+')) throw new Error('Phone number must include country code (e.g., +44...)');
+          if (!isPhoneApproved(normalized)) throw new Error('This phone number is not authorized. Please contact an administrator.');
+
+          // Create fresh invisible reCAPTCHA verifier
+          if (window.recaptchaVerifier) {
+            try { window.recaptchaVerifier.clear(); } catch (_) {}
+          }
+          window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { size: 'invisible' });
+
+          const confirmation = await auth.signInWithPhoneNumber(normalized, window.recaptchaVerifier);
+          setConfirmationResult(confirmation);
+          setStep('code');
+        } catch (err) {
+          console.error('Error sending code:', err);
+          setError(err.message || 'Failed to send verification code.');
+          if (window.recaptchaVerifier) {
+            try { window.recaptchaVerifier.clear(); } catch (_) {}
+            window.recaptchaVerifier = null;
+          }
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const verifyCode = async () => {
+        setError('');
+        setLoading(true);
+        try {
+          const result = await confirmationResult.confirm(verificationCode);
+          const profile = await getUserProfile(result.user.uid);
+          if (profile) {
+            await updateLastLogin(result.user.uid);
+            onLoginSuccess(profile.name);
+          } else {
+            setStep('name');
+          }
+        } catch (err) {
+          console.error('Error verifying code:', err);
+          setError('Invalid verification code. Please try again.');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const saveName = async () => {
+        if (!userName.trim()) { setError('Please enter your name'); return; }
+        setLoading(true);
+        try {
+          await saveUserProfile(auth.currentUser.uid, userName.trim());
+          onLoginSuccess(userName.trim());
+        } catch (err) {
+          console.error('Error saving profile:', err);
+          setError('Failed to save profile. Please try again.');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      return (
+        <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(160deg, #1a0505 0%, #2d0a0a 40%, #1f0608 100%)' }}>
+          <div className="glass rounded-2xl p-8 max-w-sm w-full fade-in">
+            <h1 className="font-display text-3xl text-port-100 text-center mb-1">Port Committee</h1>
+            <p className="text-port-400 text-center text-sm mb-8">
+              {step === 'phone' && 'Sign in with your phone number'}
+              {step === 'code' && 'Enter verification code'}
+              {step === 'name' && 'Welcome! What should we call you?'}
+            </p>
+
+            {error && (
+              <div className="rounded-lg bg-red-900/30 border border-red-500/20 text-red-300 px-4 py-3 text-sm mb-4">
+                {error}
+              </div>
+            )}
+
+            {step === 'phone' && (
+              <>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-port-300 mb-1">Phone Number</label>
+                  <input
+                    type="tel"
+                    placeholder="+44 7123 456789"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    className="w-full rounded-lg px-3 py-2.5 text-sm"
+                    disabled={loading}
+                    onKeyDown={(e) => e.key === 'Enter' && phoneNumber && sendCode()}
+                  />
+                  <p className="text-port-500 text-xs mt-1.5">Include country code (e.g., +44 for UK)</p>
+                </div>
+                <div id="recaptcha-container"></div>
+                <button
+                  onClick={sendCode}
+                  disabled={loading || !phoneNumber}
+                  className="w-full py-2.5 rounded-lg bg-port-700 text-port-100 hover:bg-port-600 transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Sending...' : 'Send Verification Code'}
+                </button>
+              </>
+            )}
+
+            {step === 'code' && (
+              <>
+                <p className="text-port-400 text-xs mb-4">
+                  A 6-digit code was sent to {phoneNumber}
+                </p>
+                <div className="mb-4">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    placeholder="000000"
+                    value={verificationCode}
+                    onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
+                    className="w-full rounded-lg px-3 py-3 text-lg text-center tracking-[0.4em]"
+                    disabled={loading}
+                    autoFocus
+                    onKeyDown={(e) => e.key === 'Enter' && verificationCode.length === 6 && verifyCode()}
+                  />
+                </div>
+                <button
+                  onClick={verifyCode}
+                  disabled={loading || verificationCode.length !== 6}
+                  className="w-full py-2.5 rounded-lg bg-port-700 text-port-100 hover:bg-port-600 transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed mb-3"
+                >
+                  {loading ? 'Verifying...' : 'Verify Code'}
+                </button>
+                <button
+                  onClick={() => { setStep('phone'); setVerificationCode(''); setError(''); }}
+                  className="w-full py-2.5 rounded-lg glass-light text-port-300 hover:bg-white/10 transition text-sm"
+                >
+                  Change Phone Number
+                </button>
+              </>
+            )}
+
+            {step === 'name' && (
+              <>
+                <p className="text-port-400 text-xs mb-4">
+                  This name will appear on your ratings and uploads.
+                </p>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-port-300 mb-1">Your Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., Gareth"
+                    value={userName}
+                    onChange={(e) => setUserName(e.target.value)}
+                    className="w-full rounded-lg px-3 py-2.5 text-sm"
+                    disabled={loading}
+                    autoFocus
+                    onKeyDown={(e) => e.key === 'Enter' && userName.trim() && saveName()}
+                  />
+                </div>
+                <button
+                  onClick={saveName}
+                  disabled={loading || !userName.trim()}
+                  className="w-full py-2.5 rounded-lg bg-port-700 text-port-100 hover:bg-port-600 transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Saving...' : 'Continue'}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     /* ───────────────── Landing Page ───────────────── */
 
     const SUBHEADINGS = [
@@ -1898,7 +2137,7 @@
       );
     }
 
-    function Dashboard({ onSelectSection }) {
+    function Dashboard({ onSelectSection, currentUserName, onLogout }) {
       const sections = [
         {
           key: 'meetings',
@@ -1955,6 +2194,14 @@
             ))}
           </div>
           <StorageUsage />
+          {currentUserName && (
+            <div className="mt-6 text-center">
+              <p className="text-port-500 text-xs mb-2">Signed in as <span className="text-port-300">{currentUserName}</span></p>
+              <button onClick={onLogout} className="text-port-500 text-xs hover:text-port-300 transition underline underline-offset-2">
+                Sign out
+              </button>
+            </div>
+          )}
         </div>
       );
     }
@@ -1979,13 +2226,13 @@
       'Other': '\uD83D\uDCDD',
     };
 
-    function LibraryUploadForm({ onSave, onCancel }) {
+    function LibraryUploadForm({ onSave, onCancel, currentUserName }) {
       const [file, setFile] = useState(null);
       const [name, setName] = useState('');
       const [description, setDescription] = useState('');
       const [category, setCategory] = useState('Other');
       const [tags, setTags] = useState('');
-      const [uploaderName, setUploaderName] = useState(() => localStorage.getItem('pc_member') || '');
+      const [uploaderName, setUploaderName] = useState(() => currentUserName || localStorage.getItem('pc_member') || '');
       const [saving, setSaving] = useState(false);
       const [errors, setErrors] = useState({});
       const fileInputRef = useRef(null);
@@ -2130,7 +2377,7 @@
       );
     }
 
-    function LibrarySection({ onBack }) {
+    function LibrarySection({ onBack, currentUserName }) {
       const [docs, setDocs] = useState([]);
       const [loading, setLoading] = useState(true);
       const [view, setView] = useState('list'); // list | upload
@@ -2329,7 +2576,7 @@
 
           <main className="max-w-5xl mx-auto px-4 py-6">
             {view === 'upload' && (
-              <LibraryUploadForm onSave={handleUpload} onCancel={() => setView('list')} />
+              <LibraryUploadForm onSave={handleUpload} onCancel={() => setView('list')} currentUserName={currentUserName} />
             )}
 
             {view === 'list' && (
@@ -2507,7 +2754,7 @@
 
     /* ───────────────── Main App ───────────────── */
 
-    function App({ section, onBack, initialNav, onNavigateToSection }) {
+    function App({ section, onBack, initialNav, onNavigateToSection, currentUserName }) {
       // Port views
       const [view, setView] = useState(initialNav?.type === 'port' ? 'detail' : 'list');
       const [selectedPort, setSelectedPort] = useState(initialNav?.type === 'port' ? initialNav.id : null);
@@ -2602,6 +2849,7 @@
             <QuickRateModal
               port={quickRate}
               onClose={() => setQuickRate(null)}
+              currentUserName={currentUserName}
               onSaved={(err) => {
                 setQuickRate(null);
                 showToast(err || 'Rating saved!', err ? 'error' : 'success');
@@ -2686,6 +2934,7 @@
                     onDelete={() => { setView('list'); setSelectedPort(null); }}
                     showToast={showToast}
                     onNavigateToMeeting={(mid) => onNavigateToSection('meetings', { type: 'meeting', id: mid })}
+                    currentUserName={currentUserName}
                   />
                 )}
               </>
@@ -2703,6 +2952,7 @@
                   <MeetingForm
                     onSave={handleAddMeeting}
                     onCancel={() => setMeetingView('list')}
+                    currentUserName={currentUserName}
                   />
                 )}
                 {meetingView === 'edit' && editMeeting && (
@@ -2710,6 +2960,7 @@
                     meeting={editMeeting}
                     onSave={handleEditMeeting}
                     onCancel={() => { setMeetingView('detail'); setEditMeeting(null); }}
+                    currentUserName={currentUserName}
                   />
                 )}
                 {meetingView === 'detail' && selectedMeeting && (
@@ -2720,6 +2971,7 @@
                     onEdit={(m) => { setEditMeeting(m); setMeetingView('edit'); }}
                     showToast={showToast}
                     onNavigateToPort={(portId) => onNavigateToSection('garrafeira', { type: 'port', id: portId })}
+                    currentUserName={currentUserName}
                   />
                 )}
               </>
@@ -2736,9 +2988,48 @@
     /* ───────────────── Root Wrapper ───────────────── */
 
     function Root() {
+      const [authChecked, setAuthChecked] = useState(false);
+      const [currentUserName, setCurrentUserName] = useState(null);
       const [entered, setEntered] = useState(false);
       const [activeSection, setActiveSection] = useState(null);
       const [initialNav, setInitialNav] = useState(null);
+
+      // Listen for auth state changes
+      useEffect(() => {
+        const unsubscribe = auth.onAuthStateChanged(async (user) => {
+          if (user) {
+            const profile = await getUserProfile(user.uid);
+            if (profile) {
+              setCurrentUserName(profile.name);
+              localStorage.setItem('pc_member', profile.name);
+            } else {
+              // Authenticated but no profile yet (will show login name step)
+              setCurrentUserName(null);
+            }
+          } else {
+            setCurrentUserName(null);
+          }
+          setAuthChecked(true);
+        });
+        return () => unsubscribe();
+      }, []);
+
+      const handleLoginSuccess = useCallback((name) => {
+        setCurrentUserName(name);
+        localStorage.setItem('pc_member', name);
+      }, []);
+
+      const handleLogout = useCallback(async () => {
+        try {
+          await auth.signOut();
+          setCurrentUserName(null);
+          setEntered(false);
+          setActiveSection(null);
+          setInitialNav(null);
+        } catch (err) {
+          console.error('Logout error:', err);
+        }
+      }, []);
 
       const handleNavigateToSection = useCallback((section, navTarget) => {
         setInitialNav(navTarget || null);
@@ -2750,11 +3041,33 @@
         setInitialNav(null);
       }, []);
 
+      // Loading while checking auth
+      if (!authChecked) {
+        return (
+          <div className="min-h-screen flex items-center justify-center">
+            <Spinner />
+          </div>
+        );
+      }
+
+      // Not authenticated — show login
+      if (!currentUserName) {
+        return <PhoneLoginScreen onLoginSuccess={handleLoginSuccess} />;
+      }
+
       return (
         <>
           {!entered && <LandingPage onEnter={() => setEntered(true)} />}
-          {entered && !activeSection && <Dashboard onSelectSection={setActiveSection} />}
-          {entered && activeSection === 'library' && <LibrarySection onBack={handleBack} />}
+          {entered && !activeSection && (
+            <Dashboard
+              onSelectSection={setActiveSection}
+              currentUserName={currentUserName}
+              onLogout={handleLogout}
+            />
+          )}
+          {entered && activeSection === 'library' && (
+            <LibrarySection onBack={handleBack} currentUserName={currentUserName} />
+          )}
           {entered && (activeSection === 'garrafeira' || activeSection === 'meetings') && (
             <App
               key={activeSection + ':' + (initialNav?.id || '')}
@@ -2762,6 +3075,7 @@
               onBack={handleBack}
               initialNav={initialNav}
               onNavigateToSection={handleNavigateToSection}
+              currentUserName={currentUserName}
             />
           )}
         </>
