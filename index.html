@@ -155,6 +155,59 @@
       box-shadow: 0 0 30px rgba(242, 236, 228, 0.08);
       letter-spacing: 0.24em;
     }
+
+    /* ── Dashboard ── */
+    .dashboard-view {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      animation: dashFadeIn 0.5s ease-out;
+    }
+    @keyframes dashFadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    .dashboard-card {
+      background: rgba(92, 14, 48, 0.18);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(184, 57, 107, 0.15);
+      border-radius: 1rem;
+      padding: 1.5rem 2rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      width: 100%;
+      max-width: 400px;
+    }
+    .dashboard-card:hover {
+      background: rgba(92, 14, 48, 0.35);
+      border-color: rgba(184, 57, 107, 0.35);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(92, 14, 48, 0.3);
+    }
+    .dashboard-card-0 {
+      opacity: 0; transform: translateY(10px);
+      animation: landingReveal 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.15s forwards;
+    }
+    .dashboard-card-1 {
+      opacity: 0; transform: translateY(10px);
+      animation: landingReveal 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.35s forwards;
+    }
+    .dashboard-card-2 {
+      opacity: 0; transform: translateY(10px);
+      animation: landingReveal 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.55s forwards;
+    }
+    .dashboard-title {
+      opacity: 0; transform: translateY(10px);
+      animation: landingReveal 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0s forwards;
+    }
+
+    /* ── Section enter transition ── */
+    .section-enter {
+      animation: dashFadeIn 0.5s ease-out;
+    }
   </style>
 </head>
 <body class="min-h-screen text-port-200">
@@ -570,7 +623,7 @@
 
           <button onClick={onBack} className="flex items-center gap-1 text-port-400 hover:text-port-200 mb-4 transition text-sm">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-            Back to list
+            Back to Garrafeira
           </button>
 
           {/* Port Info Card */}
@@ -796,7 +849,7 @@
               </svg>
               <input
                 type="text"
-                placeholder="Search ports..."
+                placeholder="Search Garrafeira..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full rounded-lg pl-9 pr-3 py-2.5 text-sm"
@@ -817,11 +870,11 @@
               {ports.length === 0 ? (
                 <>
                   <div className="text-5xl mb-4 opacity-30">&#127863;</div>
-                  <p className="text-port-400 mb-4">No ports in the collection yet.</p>
+                  <p className="text-port-400 mb-4">No ports in the Garrafeira yet.</p>
                   <button onClick={onAdd} className="px-5 py-2.5 rounded-lg bg-port-700 text-port-100 hover:bg-port-600 transition text-sm">Add Your First Port</button>
                 </>
               ) : (
-                <p className="text-port-400">No ports match your search.</p>
+                <p className="text-port-400">No ports match your search in the Garrafeira.</p>
               )}
             </div>
           ) : (
@@ -1119,7 +1172,7 @@
             <h3 className="font-display text-xl text-port-100 mb-3">Add Port to Meeting</h3>
             <input
               type="text" value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search ports..." className="w-full rounded-lg px-3 py-2 text-sm mb-3"
+              placeholder="Search Garrafeira..." className="w-full rounded-lg px-3 py-2 text-sm mb-3"
             />
             <div className="overflow-y-auto flex-1 space-y-1 min-h-0">
               {loading ? <Spinner /> : filtered.length === 0 ? (
@@ -1576,10 +1629,78 @@
 
     /* ───────────────── Landing Page ───────────────── */
 
+    const SUBHEADINGS = [
+      "Serious about Port. Not serious about much else.",
+      "Committee meetings mandatory. Pants optional.",
+      "Est. 2024. Pretending we know what we're doing since 2024.",
+      "One bottle, many opinions, zero regrets.",
+      "Where good Ports meet questionable decisions.",
+      "Tasting notes and mild chaos.",
+      "Members only. (We accept everyone.)",
+      "An elite society of people who just really like Port.",
+      "By invitation only. (Just ask.)",
+      "What's in the glass matters. What's on the agenda doesn't.",
+      "Curated selections. Unfiltered conversations.",
+      "The only committee where attendance is never mandatory.",
+      "We take Port seriously. Ourselves, less so.",
+      "Expert-level enthusiasm. Amateur-level expertise.",
+      "Sommelier aspirations. Enthusiast budgets.",
+      "Some committees build futures. We just build a really good evening.",
+      "In Port we trust. Everything else is up for debate.",
+      "The only committee where filibustering means finishing the bottle.",
+      "Self-appointed experts since 2024.",
+      "Our qualifications? Enthusiasm and a decent palate.",
+      "Good Ports. Better company. Questionable playlist choices.",
+      "Where the tasting notes get poetic and the decisions get collective.",
+      "Decanting democracy, one bottle at a time.",
+      "Minutes from last meeting: we drank the evidence.",
+      "Agenda item #1: open bottle. Agenda item #2: see item #1.",
+      "Quorum requires at least one person and one corkscrew.",
+      "Small pours, big opinions.",
+      "Technically a committee. Actually just friends with a spreadsheet.",
+      "We came for the Port. We stayed for the arguments.",
+      "Refresh for a different excuse to open a bottle.",
+      "This text changes. Your taste in Port shouldn't.",
+      "Tannin analysis: optional. Having opinions: mandatory.",
+      "Vintage matters. So does the cheese selection.",
+      "We don't always finish the bottle, but we always finish the conversation.",
+      "Governing body of good taste. Subcommittee of great nights.",
+      "Elected unanimously. Because we were the only ones voting.",
+      "Where 7pm becomes 'just one more' becomes midnight.",
+      "Scheduled meetings. Unscheduled revelations.",
+      "Port. People. Done.",
+      "Less meeting, more tasting.",
+      "Committee: yes. Commitment: flexible.",
+      "High-stakes decisions about low-stakes evenings.",
+      "Critical infrastructure for your social calendar.",
+      "The most important committee you'll never hear about in the news.",
+      "Organized enough to have a name. Relaxed enough to forget it.",
+      "Structured tastings. Unstructured everything else.",
+      "We have a spreadsheet. We rarely consult it.",
+      "Good bottles, better people, best stories.",
+      "Small group. Big glasses. Huge fun.",
+      "You've found us. The Port is already open.",
+      "Secret handshake: knowing the difference between Tawny and Ruby.",
+      "We don't talk about Port Committee. (We just drink at it.)",
+      "Disrupting the Port space. Pivoting to enjoyment.",
+      "Agile methodology applied to drinking slowly.",
+      "We could've just made a group chat. We made this instead.",
+      "The formality is fake. The Port is real.",
+      "Committee structure: unnecessary. Fun structure: essential.",
+      "None of these matter. Click something. Drink something.",
+      "This whole page is an elaborate excuse to not drink alone.",
+      "Overthinking Port since 2024.",
+      "Taking something simple and making it slightly complicated. That's us.",
+      "Hey. Yes, you. Open something nice tonight.",
+      "We're all just text on a screen, man. Pour something.",
+      "Congratulations. You've found the Port Committee.",
+    ];
+
     const LANDING_CONTOURS = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" preserveAspectRatio="xMidYMid slice"><defs><style>path{fill:none;stroke:#f2ece4;stroke-linecap:round}</style></defs><g opacity="0.07"><path d="M-20 80 Q150 40 300 90 T600 70 T900 100 T1220 60" stroke-width="1.2"/><path d="M-20 130 Q180 95 350 140 T650 115 T950 150 T1220 110" stroke-width="1"/><path d="M-20 185 Q120 155 280 190 T580 170 T880 200 T1220 165" stroke-width="1.3"/><path d="M-20 240 Q200 210 380 245 T700 225 T980 255 T1220 220" stroke-width="0.8"/><path d="M-20 295 Q160 270 320 300 T640 280 T940 310 T1220 275" stroke-width="1.1"/><path d="M-20 350 Q140 325 310 355 T620 340 T920 365 T1220 335" stroke-width="1"/><path d="M-20 410 Q190 385 370 415 T680 395 T960 420 T1220 390" stroke-width="1.2"/><path d="M-20 465 Q130 445 290 470 T590 455 T890 475 T1220 450" stroke-width="0.9"/><path d="M-20 520 Q170 500 340 525 T660 510 T940 535 T1220 505" stroke-width="1.1"/><path d="M-20 580 Q210 560 400 585 T720 565 T1000 590 T1220 565" stroke-width="1"/><path d="M-20 635 Q150 620 310 640 T610 625 T910 645 T1220 620" stroke-width="1.3"/><path d="M-20 690 Q180 675 360 695 T670 680 T960 700 T1220 680" stroke-width="0.8"/><path d="M-20 750 Q140 735 300 755 T600 740 T900 760 T1220 740" stroke-width="1"/><path d="M-20 810 Q200 795 380 815 T700 800 T980 820 T1220 800" stroke-width="1.1"/><path d="M-20 865 Q160 855 330 870 T640 860 T940 875 T1220 855" stroke-width="0.9"/><path d="M-20 200 Q100 230 250 180 T500 220 T750 170 T1000 210 T1220 190" stroke-width="2" opacity="0.7"/><path d="M-20 210 Q110 240 260 195 T510 235 T760 185 T1010 225 T1220 200" stroke-width="1.5" opacity="0.5"/></g></svg>`;
 
     function LandingPage({ onEnter }) {
       const [exiting, setExiting] = useState(false);
+      const [subheading] = useState(() => SUBHEADINGS[Math.floor(Math.random() * SUBHEADINGS.length)]);
 
       const handleEnter = () => {
         setExiting(true);
@@ -1624,7 +1745,7 @@
                 marginBottom: '3.5rem',
               }}
             >
-              A private place for good ports<br />and better opinions.
+              {subheading}
             </p>
             <div className="landing-btn">
               <button className="landing-enter" onClick={handleEnter}>
@@ -1632,6 +1753,97 @@
               </button>
             </div>
           </div>
+        </div>
+      );
+    }
+
+    /* ───────────────── Dashboard ───────────────── */
+
+    function Dashboard({ onSelectSection }) {
+      const sections = [
+        {
+          key: 'meetings',
+          title: 'Meetings',
+          description: 'Schedule & coordinate tastings',
+          icon: (
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          ),
+        },
+        {
+          key: 'garrafeira',
+          title: 'Garrafeira',
+          description: 'Our vintage cellar',
+          icon: (
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3v2m0 0c-1 0-2.5.5-2.5 2v1.5c0 .5-.5 1.5-1.5 2v1c0 .5.2 1 .5 1.5L10 15v4a2 2 0 002 2v0a2 2 0 002-2v-4l1.5-2c.3-.5.5-1 .5-1.5v-1c-1-.5-1.5-1.5-1.5-2V7c0-1.5-1.5-2-2.5-2z" />
+            </svg>
+          ),
+        },
+        {
+          key: 'library',
+          title: 'Library',
+          description: 'References & resources',
+          icon: (
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+            </svg>
+          ),
+        },
+      ];
+
+      return (
+        <div className="dashboard-view">
+          <div className="dashboard-title" style={{ textAlign: 'center', marginBottom: '3rem' }}>
+            <span style={{ fontSize: '2.5rem', display: 'block', marginBottom: '1rem' }}>&#127863;</span>
+            <h1 className="font-display text-port-100" style={{ fontSize: 'clamp(1.8rem, 5vw, 2.5rem)', marginBottom: '0.5rem' }}>Port Committee</h1>
+            <p className="text-port-400" style={{ fontSize: '0.85rem', letterSpacing: '0.15em', textTransform: 'uppercase' }}>Select a section</p>
+          </div>
+          <div className="flex flex-col gap-4 w-full items-center">
+            {sections.map((s, i) => (
+              <button
+                key={s.key}
+                onClick={() => onSelectSection(s.key)}
+                className={`dashboard-card dashboard-card-${i} flex items-center gap-4 text-left`}
+              >
+                <div className="text-gold-400 flex-shrink-0">{s.icon}</div>
+                <div>
+                  <h2 className="font-display text-lg text-port-100">{s.title}</h2>
+                  <p className="text-port-400 text-sm">{s.description}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    /* ───────────────── Library Section ───────────────── */
+
+    function LibrarySection({ onBack }) {
+      return (
+        <div className="section-enter min-h-screen">
+          <header className="border-b border-white/5">
+            <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
+              <button onClick={onBack} className="p-2 rounded-lg glass-light text-port-300 hover:text-port-100 transition" title="Back to menu">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <span style={{ fontSize: '1.5rem' }}>&#128218;</span>
+              <h1 className="font-display text-xl text-port-100">Library</h1>
+            </div>
+          </header>
+          <main className="max-w-5xl mx-auto px-4 py-16 text-center">
+            <div className="glass rounded-xl p-10 max-w-md mx-auto">
+              <svg className="w-14 h-14 mx-auto mb-5 text-port-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+              </svg>
+              <h2 className="font-display text-2xl text-port-100 mb-3">Library</h2>
+              <p className="text-port-300 leading-relaxed">References and resources coming soon...</p>
+            </div>
+          </main>
         </div>
       );
     }
@@ -1744,16 +1956,14 @@
 
     /* ───────────────── Main App ───────────────── */
 
-    function App() {
-      // Section navigation
-      const [section, setSection] = useState('ports'); // ports | meetings
+    function App({ section, onBack, initialNav, onNavigateToSection }) {
       // Port views
-      const [view, setView] = useState('list'); // list | add | detail | edit
-      const [selectedPort, setSelectedPort] = useState(null);
+      const [view, setView] = useState(initialNav?.type === 'port' ? 'detail' : 'list');
+      const [selectedPort, setSelectedPort] = useState(initialNav?.type === 'port' ? initialNav.id : null);
       const [editPort, setEditPort] = useState(null);
       // Meeting views
-      const [meetingView, setMeetingView] = useState('list'); // list | add | detail | edit
-      const [selectedMeeting, setSelectedMeeting] = useState(null);
+      const [meetingView, setMeetingView] = useState(initialNav?.type === 'meeting' ? 'detail' : 'list');
+      const [selectedMeeting, setSelectedMeeting] = useState(initialNav?.type === 'meeting' ? initialNav.id : null);
       const [editMeeting, setEditMeeting] = useState(null);
       // Shared
       const [toast, setToast] = useState(null);
@@ -1762,6 +1972,10 @@
       const showToast = useCallback((message, type = 'success') => {
         setToast({ message, type });
       }, []);
+
+      const sectionTitle = section === 'garrafeira' ? 'Garrafeira' : 'Meetings';
+      const isPortsSection = section === 'garrafeira';
+      const isMeetingsSection = section === 'meetings';
 
       const handleAddPort = async (data) => {
         const id = `port_${Date.now()}`;
@@ -1831,7 +2045,7 @@
       };
 
       return (
-        <div className="min-h-screen">
+        <div className="min-h-screen section-enter">
           {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
           {quickRate && (
             <QuickRateModal
@@ -1848,10 +2062,14 @@
           {/* Header */}
           <header className="border-b border-white/5">
             <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-              <button onClick={() => { setSection('ports'); setView('list'); setSelectedPort(null); }} className="flex items-center gap-2.5 group">
-                <span className="text-2xl">&#127863;</span>
-                <h1 className="font-display text-xl text-port-100 group-hover:text-gold-400 transition leading-tight">Port Committee</h1>
-              </button>
+              <div className="flex items-center gap-3">
+                <button onClick={onBack} className="p-2 rounded-lg glass-light text-port-300 hover:text-port-100 transition" title="Back to menu">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <h1 className="font-display text-xl text-port-100 leading-tight">{sectionTitle}</h1>
+              </div>
               <div className="flex gap-2">
                 <button
                   onClick={exportData}
@@ -1862,7 +2080,7 @@
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </button>
-                {section === 'ports' && view !== 'add' && (
+                {isPortsSection && view !== 'add' && (
                   <button
                     onClick={() => setView('add')}
                     className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-port-700 text-port-100 hover:bg-port-600 transition text-sm"
@@ -1871,7 +2089,7 @@
                     Add Port
                   </button>
                 )}
-                {section === 'meetings' && meetingView !== 'add' && (
+                {isMeetingsSection && meetingView !== 'add' && (
                   <button
                     onClick={() => setMeetingView('add')}
                     className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-port-700 text-port-100 hover:bg-port-600 transition text-sm"
@@ -1882,34 +2100,11 @@
                 )}
               </div>
             </div>
-            {/* Section Tabs */}
-            <div className="max-w-5xl mx-auto px-4 flex gap-1">
-              <button
-                onClick={() => { setSection('ports'); setView('list'); setSelectedPort(null); setEditPort(null); }}
-                className={`px-4 py-2 text-sm font-medium transition border-b-2 ${
-                  section === 'ports'
-                    ? 'text-port-100 border-gold-500'
-                    : 'text-port-400 border-transparent hover:text-port-200'
-                }`}
-              >
-                Ports
-              </button>
-              <button
-                onClick={() => { setSection('meetings'); setMeetingView('list'); setSelectedMeeting(null); setEditMeeting(null); }}
-                className={`px-4 py-2 text-sm font-medium transition border-b-2 ${
-                  section === 'meetings'
-                    ? 'text-port-100 border-gold-500'
-                    : 'text-port-400 border-transparent hover:text-port-200'
-                }`}
-              >
-                Meetings
-              </button>
-            </div>
           </header>
 
           {/* Main Content */}
           <main className="max-w-5xl mx-auto px-4 py-6">
-            {section === 'ports' && (
+            {isPortsSection && (
               <>
                 {view === 'list' && (
                   <PortList
@@ -1939,12 +2134,12 @@
                     onEdit={(p) => { setEditPort(p); setView('edit'); }}
                     onDelete={() => { setView('list'); setSelectedPort(null); }}
                     showToast={showToast}
-                    onNavigateToMeeting={(mid) => { setSection('meetings'); setSelectedMeeting(mid); setMeetingView('detail'); }}
+                    onNavigateToMeeting={(mid) => onNavigateToSection('meetings', { type: 'meeting', id: mid })}
                   />
                 )}
               </>
             )}
-            {section === 'meetings' && (
+            {isMeetingsSection && (
               <>
                 {meetingView === 'list' && (
                   <MeetingList
@@ -1973,7 +2168,7 @@
                     onBack={() => { setMeetingView('list'); setSelectedMeeting(null); }}
                     onEdit={(m) => { setEditMeeting(m); setMeetingView('edit'); }}
                     showToast={showToast}
-                    onNavigateToPort={(portId) => { setSection('ports'); setSelectedPort(portId); setView('detail'); }}
+                    onNavigateToPort={(portId) => onNavigateToSection('garrafeira', { type: 'port', id: portId })}
                   />
                 )}
               </>
@@ -1991,10 +2186,33 @@
 
     function Root() {
       const [entered, setEntered] = useState(false);
+      const [activeSection, setActiveSection] = useState(null);
+      const [initialNav, setInitialNav] = useState(null);
+
+      const handleNavigateToSection = useCallback((section, navTarget) => {
+        setInitialNav(navTarget || null);
+        setActiveSection(section);
+      }, []);
+
+      const handleBack = useCallback(() => {
+        setActiveSection(null);
+        setInitialNav(null);
+      }, []);
+
       return (
         <>
           {!entered && <LandingPage onEnter={() => setEntered(true)} />}
-          <App />
+          {entered && !activeSection && <Dashboard onSelectSection={setActiveSection} />}
+          {entered && activeSection === 'library' && <LibrarySection onBack={handleBack} />}
+          {entered && (activeSection === 'garrafeira' || activeSection === 'meetings') && (
+            <App
+              key={activeSection + ':' + (initialNav?.id || '')}
+              section={activeSection}
+              onBack={handleBack}
+              initialNav={initialNav}
+              onNavigateToSection={handleNavigateToSection}
+            />
+          )}
         </>
       );
     }
