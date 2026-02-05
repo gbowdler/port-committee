@@ -1202,13 +1202,15 @@
     const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file
     const MAX_TOTAL_STORAGE = 2.5 * 1024 * 1024 * 1024; // 2.5GB (50% of Firebase free tier)
     const MAX_FILE_COUNT = 500;
-    const ACCEPTED_FILE_TYPES = '.pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.pptx,.txt';
+    const ACCEPTED_FILE_TYPES = '.pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.pptx,.txt,.xls,.xlsx';
     const ALLOWED_MIME_TYPES = [
       'image/jpeg', 'image/png', 'image/gif',
       'application/pdf',
       'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'text/plain',
     ];
 
@@ -1959,29 +1961,437 @@
 
     /* ───────────────── Library Section ───────────────── */
 
+    const LIBRARY_CATEGORIES = [
+      'Vintage Charts',
+      'Presentations',
+      'Tasting Guides',
+      'Port Producers Info',
+      'Reference Books',
+      'Other',
+    ];
+
+    const LIBRARY_CATEGORY_ICONS = {
+      'Vintage Charts': '\uD83C\uDF77',
+      'Presentations': '\uD83D\uDCCA',
+      'Tasting Guides': '\uD83D\uDCD6',
+      'Port Producers Info': '\uD83C\uDFED',
+      'Reference Books': '\uD83D\uDCDA',
+      'Other': '\uD83D\uDCDD',
+    };
+
+    function LibraryUploadForm({ onSave, onCancel }) {
+      const [file, setFile] = useState(null);
+      const [name, setName] = useState('');
+      const [description, setDescription] = useState('');
+      const [category, setCategory] = useState('Other');
+      const [tags, setTags] = useState('');
+      const [uploaderName, setUploaderName] = useState(() => localStorage.getItem('pc_member') || '');
+      const [saving, setSaving] = useState(false);
+      const [errors, setErrors] = useState({});
+      const fileInputRef = useRef(null);
+
+      const handleFileChange = (e) => {
+        const f = e.target.files?.[0];
+        if (!f) return;
+        setFile(f);
+        if (!name) setName(f.name.replace(/\.[^/.]+$/, ''));
+      };
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        const errs = {};
+        if (!file) errs.file = 'Please select a file';
+        if (!name.trim()) errs.name = 'Name is required';
+        if (!uploaderName.trim()) errs.uploaderName = 'Your name is required';
+        setErrors(errs);
+        if (Object.keys(errs).length) return;
+
+        setSaving(true);
+        localStorage.setItem('pc_member', uploaderName.trim());
+        await onSave({
+          file,
+          name: name.trim(),
+          description: description.trim(),
+          category,
+          tags: tags.split(',').map(t => t.trim()).filter(Boolean),
+          uploaderName: uploaderName.trim(),
+        });
+        setSaving(false);
+      };
+
+      return (
+        <form onSubmit={handleSubmit} className="fade-in glass rounded-xl p-6 max-w-lg mx-auto">
+          <h2 className="font-display text-2xl text-port-100 mb-6">Upload Document</h2>
+
+          {/* File picker */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-port-300 mb-1">File <span className="text-port-500 ml-0.5">*</span></label>
+            <button type="button" onClick={() => fileInputRef.current?.click()}
+              className="w-full text-left rounded-lg px-4 py-3 glass-light text-port-200 hover:bg-white/10 transition text-sm border border-dashed border-white/10">
+              {file ? (
+                <span className="flex items-center gap-2">
+                  <FileIcon type={file.type} />
+                  <span className="truncate">{file.name}</span>
+                  <span className="text-port-500 flex-shrink-0">({formatFileSize(file.size)})</span>
+                </span>
+              ) : 'Choose file...'}
+            </button>
+            <input ref={fileInputRef} type="file" accept={ACCEPTED_FILE_TYPES} className="hidden" onChange={handleFileChange} />
+            {errors.file && <p className="text-red-400 text-xs mt-1">{errors.file}</p>}
+          </div>
+
+          {/* Name */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-port-300 mb-1">Document Name <span className="text-port-500 ml-0.5">*</span></label>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Vintage Chart 2020-2024" className="w-full rounded-lg px-3 py-2 text-sm" />
+            {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name}</p>}
+          </div>
+
+          {/* Description */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-port-300 mb-1">Description</label>
+            <textarea value={description} onChange={e => setDescription(e.target.value)} rows={2} placeholder="Brief description..." className="w-full rounded-lg px-3 py-2 text-sm" />
+          </div>
+
+          {/* Category */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-port-300 mb-1">Category</label>
+            <select value={category} onChange={e => setCategory(e.target.value)} className="w-full rounded-lg px-3 py-2 text-sm">
+              {LIBRARY_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+
+          {/* Tags */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-port-300 mb-1">Tags</label>
+            <input type="text" value={tags} onChange={e => setTags(e.target.value)} placeholder="e.g. tawny, douro, 2020" className="w-full rounded-lg px-3 py-2 text-sm" />
+          </div>
+
+          {/* Uploader name */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-port-300 mb-1">Your Name <span className="text-port-500 ml-0.5">*</span></label>
+            <input type="text" value={uploaderName} onChange={e => setUploaderName(e.target.value)} placeholder="Name" className="w-full rounded-lg px-3 py-2 text-sm" />
+            {errors.uploaderName && <p className="text-red-400 text-xs mt-1">{errors.uploaderName}</p>}
+          </div>
+
+          <div className="flex gap-3 justify-end">
+            <button type="button" onClick={onCancel} className="px-4 py-2 rounded-lg glass-light text-port-200 hover:bg-white/10 transition text-sm">Cancel</button>
+            <button type="submit" disabled={saving} className="px-5 py-2 rounded-lg bg-port-700 text-port-100 hover:bg-port-600 transition text-sm disabled:opacity-50">
+              {saving ? 'Uploading...' : 'Upload'}
+            </button>
+          </div>
+        </form>
+      );
+    }
+
+    function LibraryCard({ doc, onPreview, onDownload, onDelete }) {
+      const f = doc.file || {};
+      const isImage = f.type && f.type.startsWith('image/');
+      const isPdf = f.type && f.type.includes('pdf');
+      const canPreview = isImage || isPdf;
+      const catIcon = LIBRARY_CATEGORY_ICONS[doc.category] || '\uD83D\uDCDD';
+
+      return (
+        <div className="glass rounded-xl p-4 fade-in">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 w-10 h-10 rounded-lg border border-white/10 flex items-center justify-center bg-white/[0.02] text-lg">
+              {catIcon}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-port-100 font-medium text-sm truncate">{doc.name}</h3>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-port-800/60 text-port-400">{doc.category}</span>
+                <span className="text-port-500 text-xs">{f.name?.split('.').pop()?.toUpperCase()}</span>
+                <span className="text-port-500 text-xs">{formatFileSize(f.size)}</span>
+              </div>
+              {doc.description && <p className="text-port-400 text-xs mt-1 line-clamp-2">{doc.description}</p>}
+              <p className="text-port-500 text-[10px] mt-1">{doc.uploadedBy} &middot; {new Date(doc.uploadedAt).toLocaleDateString()}</p>
+              {doc.tags?.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {doc.tags.map(t => <span key={t} className="text-[10px] px-1.5 py-0.5 rounded-full bg-white/5 text-port-400">{t}</span>)}
+                </div>
+              )}
+            </div>
+            <div className="flex gap-1 flex-shrink-0">
+              {canPreview && (
+                <button onClick={() => onPreview(doc)} className="p-1.5 rounded-lg hover:bg-white/10 transition text-port-400 hover:text-port-200" title="Preview">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                </button>
+              )}
+              <button onClick={() => onDownload(doc)} className="p-1.5 rounded-lg hover:bg-white/10 transition text-port-400 hover:text-port-200" title="Download">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+              </button>
+              <button onClick={() => onDelete(doc)} className="p-1.5 rounded-lg hover:bg-white/10 transition text-port-500 hover:text-red-400" title="Delete">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     function LibrarySection({ onBack }) {
+      const [docs, setDocs] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [view, setView] = useState('list'); // list | upload
+      const [search, setSearch] = useState('');
+      const [catFilter, setCatFilter] = useState('');
+      const [sort, setSort] = useState('date-desc');
+      const [toast, setToast] = useState(null);
+      const [previewDoc, setPreviewDoc] = useState(null);
+      const [deleteDoc, setDeleteDoc] = useState(null);
+
+      const showToast = useCallback((message, type = 'success') => setToast({ message, type }), []);
+
+      const load = useCallback(async () => {
+        setLoading(true);
+        const ids = (await storage.get('library:list')) || [];
+        const items = [];
+        for (const id of ids) {
+          const d = await storage.get(`library:${id}`);
+          if (d) items.push(d);
+        }
+        setDocs(items);
+        setLoading(false);
+      }, []);
+
+      useEffect(() => { load(); }, [load]);
+
+      useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape' && previewDoc) setPreviewDoc(null); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+      }, [previewDoc]);
+
+      const handleUpload = async ({ file, name, description, category, tags, uploaderName }) => {
+        try {
+          await validateFileUpload(file);
+          const processed = await compressImageFile(file);
+          showToast('Uploading...');
+
+          const id = `lib_${Date.now()}`;
+          const storagePath = `library/${id}/${Date.now()}_${processed.name}`;
+          const fileRef = firebaseStorage.ref().child(storagePath);
+          await fileRef.put(processed);
+          const downloadURL = await fileRef.getDownloadURL();
+
+          const doc = {
+            id,
+            name,
+            description,
+            category,
+            tags,
+            file: { name: processed.name, type: processed.type, size: processed.size, url: downloadURL, path: storagePath },
+            uploadedBy: uploaderName,
+            uploadedAt: new Date().toISOString(),
+          };
+
+          const ok1 = await storage.set(`library:${id}`, doc);
+          const ids = (await storage.get('library:list')) || [];
+          ids.push(id);
+          const ok2 = await storage.set('library:list', ids);
+
+          if (ok1 && ok2) {
+            await updateStorageStats(processed.size, true);
+            setDocs(prev => [...prev, doc]);
+            setView('list');
+            showToast('Document uploaded!');
+          } else {
+            try { await firebaseStorage.ref().child(storagePath).delete(); } catch (_) {}
+            showToast('Failed to save document.', 'error');
+          }
+        } catch (error) {
+          console.error('Library upload error:', error);
+          showToast(error.message || 'Upload failed.', 'error');
+        }
+      };
+
+      const handleDelete = async (doc) => {
+        if (doc.file?.path) {
+          try {
+            await firebaseStorage.ref().child(doc.file.path).delete();
+            await updateStorageStats(doc.file.size || 0, false);
+          } catch (e) { console.error('File delete error:', e); }
+        }
+        const ids = ((await storage.get('library:list')) || []).filter(id => id !== doc.id);
+        await storage.set('library:list', ids);
+        await storage.set(`library:${doc.id}`, null);
+        setDocs(prev => prev.filter(d => d.id !== doc.id));
+        setDeleteDoc(null);
+        showToast('Document deleted');
+      };
+
+      const downloadDoc = async (doc) => {
+        const src = doc.file?.url;
+        if (!src) return;
+        try {
+          const response = await fetch(src);
+          const blob = await response.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = doc.file.name || doc.name;
+          a.click();
+          URL.revokeObjectURL(url);
+        } catch (e) {
+          window.open(src, '_blank');
+        }
+      };
+
+      const filtered = useMemo(() => {
+        let list = [...docs];
+        if (search) {
+          const q = search.toLowerCase();
+          list = list.filter(d =>
+            d.name.toLowerCase().includes(q) ||
+            (d.description || '').toLowerCase().includes(q) ||
+            (d.tags || []).some(t => t.toLowerCase().includes(q))
+          );
+        }
+        if (catFilter) list = list.filter(d => d.category === catFilter);
+        const [field, dir] = sort.split('-');
+        list.sort((a, b) => {
+          if (field === 'name') return dir === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+          if (field === 'size') return dir === 'desc' ? (b.file?.size || 0) - (a.file?.size || 0) : (a.file?.size || 0) - (b.file?.size || 0);
+          const da = new Date(a.uploadedAt), db = new Date(b.uploadedAt);
+          return dir === 'desc' ? db - da : da - db;
+        });
+        return list;
+      }, [docs, search, catFilter, sort]);
+
       return (
         <div className="section-enter min-h-screen">
+          {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+          {deleteDoc && (
+            <ConfirmDialog
+              title="Delete Document"
+              message={`Delete "${deleteDoc.name}"? The file will be permanently removed.`}
+              onConfirm={() => handleDelete(deleteDoc)}
+              onCancel={() => setDeleteDoc(null)}
+            />
+          )}
+
+          {/* Preview modal */}
+          {previewDoc && (() => {
+            const src = previewDoc.file?.url;
+            const isImg = previewDoc.file?.type?.startsWith('image/');
+            const isPdf = previewDoc.file?.type?.includes('pdf');
+            return (
+              <div className="fixed inset-0 z-50 flex flex-col bg-black/85 backdrop-blur-sm fade-in" onClick={() => setPreviewDoc(null)}>
+                <div className="flex items-center justify-between px-4 py-3 bg-black/40 border-b border-white/5" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileIcon type={previewDoc.file?.type} />
+                    <span className="text-port-100 text-sm font-medium truncate">{previewDoc.name}</span>
+                    <span className="text-port-500 text-xs flex-shrink-0">{formatFileSize(previewDoc.file?.size)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button onClick={() => downloadDoc(previewDoc)} className="px-3 py-1.5 rounded-lg glass-light text-port-200 hover:bg-white/10 transition text-sm">Download</button>
+                    <button onClick={() => setPreviewDoc(null)} className="p-1.5 rounded-lg glass-light text-port-200 hover:bg-white/10 transition" title="Close">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 flex items-center justify-center overflow-auto p-4" onClick={e => { if (e.target === e.currentTarget) setPreviewDoc(null); }}>
+                  {isImg && <img src={src} alt={previewDoc.name} className="max-w-full max-h-full object-contain rounded-lg" style={{ maxHeight: 'calc(100vh - 80px)' }} onClick={e => e.stopPropagation()} />}
+                  {isPdf && <iframe src={src} title={previewDoc.name} className="w-full rounded-lg bg-white" style={{ maxWidth: '900px', height: 'calc(100vh - 80px)' }} onClick={e => e.stopPropagation()} />}
+                  {!isImg && !isPdf && (
+                    <div className="glass rounded-xl p-8 text-center" onClick={e => e.stopPropagation()}>
+                      <FileIcon type={previewDoc.file?.type} />
+                      <p className="text-port-300 mt-3 mb-4">Preview not available for this file type.</p>
+                      <button onClick={() => downloadDoc(previewDoc)} className="px-5 py-2.5 rounded-lg bg-port-700 text-port-100 hover:bg-port-600 transition text-sm">Download File</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Header */}
           <header className="border-b border-white/5">
-            <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
-              <button onClick={onBack} className="p-2 rounded-lg glass-light text-port-300 hover:text-port-100 transition" title="Back to menu">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <span style={{ fontSize: '1.5rem' }}>&#128218;</span>
-              <h1 className="font-display text-xl text-port-100">Library</h1>
+            <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <button onClick={onBack} className="p-2 rounded-lg glass-light text-port-300 hover:text-port-100 transition" title="Back to menu">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <h1 className="font-display text-xl text-port-100">Library</h1>
+              </div>
+              {view === 'list' && (
+                <button onClick={() => setView('upload')} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-port-700 text-port-100 hover:bg-port-600 transition text-sm">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                  Upload
+                </button>
+              )}
             </div>
           </header>
-          <main className="max-w-5xl mx-auto px-4 py-16 text-center">
-            <div className="glass rounded-xl p-10 max-w-md mx-auto">
-              <svg className="w-14 h-14 mx-auto mb-5 text-port-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-              </svg>
-              <h2 className="font-display text-2xl text-port-100 mb-3">Library</h2>
-              <p className="text-port-300 leading-relaxed">References and resources coming soon...</p>
-            </div>
+
+          <main className="max-w-5xl mx-auto px-4 py-6">
+            {view === 'upload' && (
+              <LibraryUploadForm onSave={handleUpload} onCancel={() => setView('list')} />
+            )}
+
+            {view === 'list' && (
+              <div className="fade-in">
+                {/* Search / Filter */}
+                {docs.length > 0 && (
+                  <div className="flex flex-col sm:flex-row gap-3 mb-6">
+                    <div className="relative flex-1">
+                      <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-port-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                      <input type="text" placeholder="Search library..." value={search} onChange={e => setSearch(e.target.value)} className="w-full rounded-lg pl-9 pr-3 py-2.5 text-sm" />
+                    </div>
+                    <select value={catFilter} onChange={e => setCatFilter(e.target.value)} className="rounded-lg px-3 py-2.5 text-sm min-w-[150px]">
+                      <option value="">All Categories</option>
+                      {LIBRARY_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select value={sort} onChange={e => setSort(e.target.value)} className="rounded-lg px-3 py-2.5 text-sm min-w-[150px]">
+                      <option value="date-desc">Newest First</option>
+                      <option value="date-asc">Oldest First</option>
+                      <option value="name-asc">Name A-Z</option>
+                      <option value="name-desc">Name Z-A</option>
+                      <option value="size-desc">Largest First</option>
+                      <option value="size-asc">Smallest First</option>
+                    </select>
+                  </div>
+                )}
+
+                {loading ? <Spinner /> : filtered.length === 0 ? (
+                  <div className="text-center py-16">
+                    {docs.length === 0 ? (
+                      <>
+                        <svg className="w-14 h-14 mx-auto mb-4 text-port-400 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
+                        <p className="text-port-400 mb-4">No documents in the library yet.</p>
+                        <button onClick={() => setView('upload')} className="px-5 py-2.5 rounded-lg bg-port-700 text-port-100 hover:bg-port-600 transition text-sm">Upload Your First Document</button>
+                      </>
+                    ) : (
+                      <p className="text-port-400">No documents match your search.</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="grid gap-3">
+                    {filtered.map(doc => (
+                      <LibraryCard
+                        key={doc.id}
+                        doc={doc}
+                        onPreview={setPreviewDoc}
+                        onDownload={downloadDoc}
+                        onDelete={setDeleteDoc}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </main>
+
+          <footer className="max-w-5xl mx-auto px-4 py-4 text-center">
+            <p className="text-port-500 text-xs">Cloud storage &mdash; documents are shared across all Port Committee members.</p>
+          </footer>
         </div>
       );
     }
@@ -1991,11 +2401,13 @@
     async function exportData() {
       const portIds = (await storage.get('ports:list')) || [];
       const meetingIds = (await storage.get('meetings:list')) || [];
+      const libraryIds = (await storage.get('library:list')) || [];
 
-      const [ports, ratings, meetings] = await Promise.all([
+      const [ports, ratings, meetings, libraryDocs] = await Promise.all([
         storage.getMulti(portIds.map(id => `port:${id}`)),
         storage.getMulti(portIds.map(id => `ratings:${id}`)),
         storage.getMulti(meetingIds.map(id => `meeting:${id}`)),
+        storage.getMulti(libraryIds.map(id => `library:${id}`)),
       ]);
 
       const data = {
@@ -2003,6 +2415,7 @@
         ports: ports.filter(Boolean),
         ratings: ratings.filter(Boolean),
         meetings: meetings.filter(Boolean),
+        library: libraryDocs.filter(Boolean),
       };
 
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
