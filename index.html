@@ -1356,6 +1356,12 @@
 
       useEffect(() => { load(); }, [load]);
 
+      useEffect(() => {
+        const onKey = (e) => { if (e.key === 'Escape' && previewAtt) setPreviewAtt(null); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+      }, [previewAtt]);
+
       const submitRsvp = async (e) => {
         e.preventDefault();
         const errs = {};
@@ -1534,17 +1540,45 @@
               onCancel={() => setDeleteAttId(null)}
             />
           )}
-          {previewAtt && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm fade-in p-4" onClick={() => setPreviewAtt(null)}>
-              <div className="max-w-3xl max-h-[90vh] overflow-auto" onClick={e => e.stopPropagation()}>
-                <img src={previewAtt.url || previewAtt.data} alt={previewAtt.name} className="max-w-full rounded-lg" />
-                <div className="flex justify-center gap-3 mt-3">
-                  <button onClick={() => downloadAttachment(previewAtt)} className="px-4 py-2 rounded-lg glass-light text-port-200 hover:bg-white/10 transition text-sm">Download</button>
-                  <button onClick={() => setPreviewAtt(null)} className="px-4 py-2 rounded-lg glass-light text-port-200 hover:bg-white/10 transition text-sm">Close</button>
+          {previewAtt && (() => {
+            const src = previewAtt.url || previewAtt.data;
+            const isImg = previewAtt.type && previewAtt.type.startsWith('image/');
+            const isPdf = previewAtt.type && previewAtt.type.includes('pdf');
+            return (
+              <div className="fixed inset-0 z-50 flex flex-col bg-black/85 backdrop-blur-sm fade-in" onClick={() => setPreviewAtt(null)}>
+                {/* Header */}
+                <div className="flex items-center justify-between px-4 py-3 bg-black/40 border-b border-white/5" onClick={e => e.stopPropagation()}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileIcon type={previewAtt.type} />
+                    <span className="text-port-100 text-sm font-medium truncate">{previewAtt.name}</span>
+                    <span className="text-port-500 text-xs flex-shrink-0">{formatFileSize(previewAtt.size)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button onClick={() => downloadAttachment(previewAtt)} className="px-3 py-1.5 rounded-lg glass-light text-port-200 hover:bg-white/10 transition text-sm">Download</button>
+                    <button onClick={() => setPreviewAtt(null)} className="p-1.5 rounded-lg glass-light text-port-200 hover:bg-white/10 transition" title="Close">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  </div>
+                </div>
+                {/* Content */}
+                <div className="flex-1 flex items-center justify-center overflow-auto p-4" onClick={e => { if (e.target === e.currentTarget) setPreviewAtt(null); }}>
+                  {isImg && (
+                    <img src={src} alt={previewAtt.name} className="max-w-full max-h-full object-contain rounded-lg" style={{ maxHeight: 'calc(100vh - 80px)' }} onClick={e => e.stopPropagation()} />
+                  )}
+                  {isPdf && (
+                    <iframe src={src} title={previewAtt.name} className="w-full rounded-lg bg-white" style={{ maxWidth: '900px', height: 'calc(100vh - 80px)' }} onClick={e => e.stopPropagation()} />
+                  )}
+                  {!isImg && !isPdf && (
+                    <div className="glass rounded-xl p-8 text-center" onClick={e => e.stopPropagation()}>
+                      <FileIcon type={previewAtt.type} />
+                      <p className="text-port-300 mt-3 mb-4">Preview not available for this file type.</p>
+                      <button onClick={() => downloadAttachment(previewAtt)} className="px-5 py-2.5 rounded-lg bg-port-700 text-port-100 hover:bg-port-600 transition text-sm">Download File</button>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           <button onClick={onBack} className="flex items-center gap-1 text-port-400 hover:text-port-200 mb-4 transition text-sm">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
@@ -1674,6 +1708,8 @@
               <div className="space-y-2">
                 {meeting.attachments.map(att => {
                   const isImage = att.type && att.type.startsWith('image/');
+                  const isPdf = att.type && att.type.includes('pdf');
+                  const canPreview = isImage || isPdf;
                   return (
                     <div key={att.id} className="glass-light rounded-lg p-3">
                       <div className="flex items-center gap-3">
@@ -1682,16 +1718,16 @@
                             <img src={att.url || att.data} alt={att.name} className="w-12 h-12 object-cover rounded border border-white/10" />
                           </button>
                         ) : (
-                          <div className="flex-shrink-0 w-12 h-12 rounded border border-white/10 flex items-center justify-center bg-white/[0.02]">
+                          <button onClick={() => canPreview ? setPreviewAtt(att) : downloadAttachment(att)} className="flex-shrink-0 w-12 h-12 rounded border border-white/10 flex items-center justify-center bg-white/[0.02] hover:bg-white/[0.06] transition cursor-pointer">
                             <FileIcon type={att.type} />
-                          </div>
+                          </button>
                         )}
                         <div className="min-w-0 flex-1">
                           <p className="text-port-100 text-sm font-medium truncate">{att.name}</p>
                           <p className="text-port-500 text-xs">{formatFileSize(att.size)} &middot; {att.uploadedBy} &middot; {new Date(att.uploadedAt).toLocaleDateString()}</p>
                         </div>
                         <div className="flex gap-1 flex-shrink-0">
-                          {isImage && (
+                          {canPreview && (
                             <button onClick={() => setPreviewAtt(att)} className="p-1.5 rounded-lg hover:bg-white/10 transition text-port-400 hover:text-port-200" title="Preview">
                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                             </button>
