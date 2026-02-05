@@ -1197,8 +1197,20 @@
 
     /* ───────────────── Meeting Detail View ───────────────── */
 
-    const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024; // 5MB
-    const ACCEPTED_FILE_TYPES = '.pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.txt';
+    /* ── Upload Limits & Safeguards ── */
+
+    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file
+    const MAX_TOTAL_STORAGE = 2.5 * 1024 * 1024 * 1024; // 2.5GB (50% of Firebase free tier)
+    const MAX_FILE_COUNT = 500;
+    const ACCEPTED_FILE_TYPES = '.pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.pptx,.txt';
+    const ALLOWED_MIME_TYPES = [
+      'image/jpeg', 'image/png', 'image/gif',
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'text/plain',
+    ];
 
     function formatFileSize(bytes) {
       if (bytes < 1024) return bytes + ' B';
@@ -1206,27 +1218,77 @@
       return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     }
 
-    function compressImage(dataUrl, maxWidth = 1200, quality = 0.8) {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => {
-          let w = img.width, h = img.height;
-          if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
-          const canvas = document.createElement('canvas');
-          canvas.width = w;
-          canvas.height = h;
-          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-          resolve(canvas.toDataURL('image/jpeg', quality));
-        };
-        img.src = dataUrl;
-      });
+    async function getStorageStats() {
+      try {
+        const doc = await db.collection('portCommittee').doc('storage_stats').get();
+        return doc.exists ? doc.data() : { totalBytes: 0, fileCount: 0 };
+      } catch (e) {
+        console.error('Failed to read storage stats:', e);
+        return { totalBytes: 0, fileCount: 0 };
+      }
     }
 
-    function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
+    async function updateStorageStats(fileSize, increment) {
+      try {
+        const stats = await getStorageStats();
+        await db.collection('portCommittee').doc('storage_stats').set({
+          totalBytes: increment
+            ? stats.totalBytes + fileSize
+            : Math.max(0, stats.totalBytes - fileSize),
+          fileCount: increment
+            ? stats.fileCount + 1
+            : Math.max(0, stats.fileCount - 1),
+          lastUpdated: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.error('Failed to update storage stats:', e);
+      }
+    }
+
+    async function validateFileUpload(file) {
+      if (file.size > MAX_FILE_SIZE) {
+        throw new Error(`File too large (${formatFileSize(file.size)}). Maximum size is 5 MB.`);
+      }
+      if (file.type && !ALLOWED_MIME_TYPES.includes(file.type)) {
+        throw new Error('File type not allowed. Allowed: JPG, PNG, GIF, PDF, Word, PowerPoint, TXT.');
+      }
+      const stats = await getStorageStats();
+      if (stats.totalBytes + file.size > MAX_TOTAL_STORAGE) {
+        throw new Error('Storage limit reached (2.5 GB). Please delete old files first.');
+      }
+      if (stats.fileCount >= MAX_FILE_COUNT) {
+        throw new Error(`File count limit reached (${MAX_FILE_COUNT} files). Please delete old files first.`);
+      }
+    }
+
+    function compressImageFile(file, maxDim = 1600, quality = 0.8) {
+      if (!file.type.startsWith('image/')) return Promise.resolve(file);
+      return new Promise((resolve) => {
         const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            let w = img.width, h = img.height;
+            if (w <= maxDim && h <= maxDim && file.size <= 500 * 1024) {
+              resolve(file); // already small enough
+              return;
+            }
+            if (w > maxDim || h > maxDim) {
+              if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
+              else { w = Math.round(w * maxDim / h); h = maxDim; }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            canvas.toBlob((blob) => {
+              const compressed = new File([blob], file.name.replace(/\.[^/.]+$/, '.jpg'), { type: 'image/jpeg' });
+              console.log(`Compressed ${file.name}: ${formatFileSize(file.size)} → ${formatFileSize(compressed.size)}`);
+              resolve(compressed);
+            }, 'image/jpeg', quality);
+          };
+          img.src = e.target.result;
+        };
         reader.readAsDataURL(file);
       });
     }
@@ -1345,22 +1407,27 @@
         const file = e.target.files?.[0];
         if (!file) return;
         if (attachInputRef.current) attachInputRef.current.value = '';
-        if (file.size > MAX_ATTACHMENT_SIZE) {
-          showToast(`File too large (${formatFileSize(file.size)}). Max 5 MB.`, 'error');
-          return;
-        }
-        const uploaderName = localStorage.getItem('pc_member') || 'Unknown';
+
         try {
+          // Validate
+          await validateFileUpload(file);
+
+          // Compress images
+          const processed = await compressImageFile(file);
+
           showToast('Uploading file...');
-          const storagePath = `meetings/${meetingId}/${Date.now()}_${file.name}`;
+          const uploaderName = localStorage.getItem('pc_member') || 'Unknown';
+          const timestamp = Date.now();
+          const storagePath = `meetings/${meetingId}/${timestamp}_${processed.name}`;
           const fileRef = firebaseStorage.ref().child(storagePath);
-          await fileRef.put(file);
+          await fileRef.put(processed);
           const downloadURL = await fileRef.getDownloadURL();
+
           const att = {
-            id: `att_${Date.now()}`,
-            name: file.name,
-            type: file.type,
-            size: file.size,
+            id: `att_${timestamp}`,
+            name: processed.name,
+            type: processed.type,
+            size: processed.size,
             url: downloadURL,
             path: storagePath,
             uploadedBy: uploaderName,
@@ -1371,13 +1438,16 @@
           const ok = await storage.set(`meeting:${meetingId}`, updated);
           if (ok) {
             setMeeting(updated);
+            await updateStorageStats(processed.size, true);
             showToast('File attached!');
           } else {
+            // Metadata save failed; clean up uploaded file
+            try { await firebaseStorage.ref().child(storagePath).delete(); } catch (_) {}
             showToast('Failed to save attachment metadata.', 'error');
           }
         } catch (error) {
           console.error('Upload error:', error);
-          showToast('Failed to upload file.', 'error');
+          showToast(error.message || 'Failed to upload file.', 'error');
         }
       };
 
@@ -1386,6 +1456,7 @@
         if (att?.path) {
           try {
             await firebaseStorage.ref().child(att.path).delete();
+            await updateStorageStats(att.size || 0, false);
           } catch (error) {
             console.error('Failed to delete file from storage:', error);
           }
@@ -1759,6 +1830,20 @@
 
     /* ───────────────── Dashboard ───────────────── */
 
+    function StorageUsage() {
+      const [stats, setStats] = useState(null);
+      useEffect(() => { getStorageStats().then(setStats); }, []);
+      if (!stats || (stats.totalBytes === 0 && stats.fileCount === 0)) return null;
+      const pct = ((stats.totalBytes / MAX_TOTAL_STORAGE) * 100).toFixed(1);
+      const usedMB = (stats.totalBytes / (1024 * 1024)).toFixed(1);
+      const limitGB = (MAX_TOTAL_STORAGE / (1024 * 1024 * 1024)).toFixed(1);
+      return (
+        <div className="mt-8 text-center text-port-500 text-xs" style={{ opacity: 0.7 }}>
+          <p>Storage: {usedMB} MB / {limitGB} GB ({pct}%) &middot; {stats.fileCount} / {MAX_FILE_COUNT} files</p>
+        </div>
+      );
+    }
+
     function Dashboard({ onSelectSection }) {
       const sections = [
         {
@@ -1815,6 +1900,7 @@
               </button>
             ))}
           </div>
+          <StorageUsage />
         </div>
       );
     }
