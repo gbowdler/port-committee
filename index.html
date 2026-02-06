@@ -2239,18 +2239,18 @@
         // Video loaded — start the sequence
         setVideoPhase('fade-in');
 
-        // 1s: fully visible
-        const t1 = setTimeout(() => setVideoPhase('playing'), 1000);
-        // 4s: start fading to watermark, reveal content
+        // 0.5s: fully visible
+        const t1 = setTimeout(() => setVideoPhase('playing'), 500);
+        // 3s: start fading to watermark, reveal content
         const t2 = setTimeout(() => {
           setVideoPhase('fade-out');
           setShowContent(true);
-        }, 4000);
-        // 5s: settle at watermark opacity
+        }, 3000);
+        // 4s: settle at watermark opacity
         const t3 = setTimeout(() => {
           setVideoPhase('complete');
           _dashboardVideoSeen.current = true;
-        }, 5500);
+        }, 4000);
 
         return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
       }, [videoLoaded]);
@@ -2269,7 +2269,7 @@
       }, [videoLoaded]);
 
       const videoOpacity = { loading: 0, 'fade-in': 0, playing: 1, 'fade-out': 0.08, complete: 0.08 }[videoPhase] ?? 0.08;
-      const videoTransition = videoPhase === 'fade-in' ? 'opacity 1s ease-in' : videoPhase === 'fade-out' ? 'opacity 1.5s ease-out' : 'none';
+      const videoTransition = videoPhase === 'fade-in' ? 'opacity 0.5s ease-in' : videoPhase === 'fade-out' ? 'opacity 1s ease-out' : 'none';
 
       const VIDEO_URL = 'https://firebasestorage.googleapis.com/v0/b/port-committee.firebasestorage.app/o/Assets%2F20260206_1128_New%20Video_storyboard_01kgsbbsgmfhfvg4remrrd3xq4%20(1).mp4?alt=media&token=1ac8e5ca-c014-46ce-8d7c-88e45e875f9f';
 
