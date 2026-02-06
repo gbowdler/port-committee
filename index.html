@@ -454,6 +454,7 @@
         producer: port?.producer || '',
         type: port?.type || 'Tawny',
         year: port?.year || '',
+        officialNotes: port?.officialNotes || '',
         photo: port?.photo || '',
         purchaseLocation: port?.purchaseLocation || '',
       });
@@ -465,8 +466,6 @@
         const errs = {};
         if (!form.name.trim()) errs.name = 'Port name is required';
         if (!form.producer.trim()) errs.producer = 'Producer is required';
-        if (form.year && (isNaN(form.year) || form.year < 1700 || form.year > new Date().getFullYear()))
-          errs.year = 'Enter a valid year';
         setErrors(errs);
         return Object.keys(errs).length === 0;
       };
@@ -477,7 +476,7 @@
         setSaving(true);
         const data = {
           ...form,
-          year: form.year ? Number(form.year) : null,
+          year: form.year ? form.year.trim() : null,
         };
         await onSave(data);
         setSaving(false);
@@ -527,7 +526,19 @@
               {field('Port Name', 'name', 'text', { required: true, placeholder: "e.g. Dow's 2017 Vintage" })}
               {field('Producer', 'producer', 'text', { required: true, placeholder: "e.g. Dow's" })}
               {field('Type', 'type', 'text', { select: true, options: PORT_TYPES })}
-              {field('Year', 'year', 'number', { placeholder: 'e.g. 2017' })}
+              <div>
+                <label className="block text-sm font-medium text-port-300 mb-1">Year / Age</label>
+                <input
+                  type="text"
+                  value={form.year}
+                  onChange={(e) => setForm({ ...form, year: e.target.value })}
+                  placeholder="e.g., 2016 or 10 Year Old"
+                  className="w-full rounded-lg px-3 py-2 text-sm"
+                />
+                <p className="text-port-500 text-xs mt-1">Vintage year or age statement</p>
+              </div>
+              {field('Official Tasting Notes', 'officialNotes', 'text', { textarea: true, full: true, placeholder: 'Enter official tasting notes from producer or reference...' })}
+              {field('Purchase Location', 'purchaseLocation', 'text', { placeholder: 'Store or website' })}
               <div className="sm:col-span-2">
                 <label className="block text-sm font-medium text-port-300 mb-1">Photo</label>
                 <div className="flex items-start gap-4">
@@ -571,7 +582,6 @@
                 </div>
                 <p className="text-port-500 text-xs mt-1">JPG, PNG, or WebP (optional)</p>
               </div>
-              {field('Purchase Location', 'purchaseLocation', 'text', { placeholder: 'Store or website' })}
               <div className="sm:col-span-2 flex gap-3 justify-end pt-2">
                 <button type="button" onClick={onCancel} className="px-5 py-2.5 rounded-lg glass-light text-port-200 hover:bg-white/10 transition text-sm">Cancel</button>
                 <button type="submit" disabled={saving} className="px-5 py-2.5 rounded-lg bg-port-700 text-port-100 hover:bg-port-600 transition text-sm disabled:opacity-50">
@@ -597,6 +607,7 @@
       const [submitting, setSubmitting] = useState(false);
       const [ratingErrors, setRatingErrors] = useState({});
       const [showConfirm, setShowConfirm] = useState(false);
+      const [ratingFormExpanded, setRatingFormExpanded] = useState(false);
 
       const load = useCallback(async () => {
         setLoading(true);
@@ -644,6 +655,7 @@
           setRatings(updated);
           setNewRating(0);
           setNewNotes('');
+          setRatingFormExpanded(false);
           showToast('Rating saved!');
         } else {
           showToast('Failed to save rating', 'error');
@@ -704,6 +716,12 @@
                 <img src={port.photo} alt={port.name} className="w-full max-w-xs rounded-lg border border-white/10" />
               </div>
             )}
+            {port.officialNotes && (
+              <div className="mb-3">
+                <h4 className="text-xs font-semibold text-port-400 uppercase tracking-wider mb-1">Official Tasting Notes</h4>
+                <p className="text-port-200 text-sm leading-relaxed whitespace-pre-line">{port.officialNotes}</p>
+              </div>
+            )}
             {port.purchaseLocation && (
               <div className="mb-3">
                 <h4 className="text-xs font-semibold text-port-400 uppercase tracking-wider mb-1">Purchase Info</h4>
@@ -744,41 +762,67 @@
             )}
           </div>
 
-          {/* Add Rating */}
+          {/* Add/Edit Rating */}
           <div className="glass rounded-xl p-6">
-            <h3 className="font-display text-xl text-port-100 mb-4">Add Your Rating</h3>
-            <form onSubmit={submitRating} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-port-300 mb-1">Your Name<span className="text-port-500 ml-0.5">*</span></label>
-                <input
-                  type="text"
-                  value={memberName}
-                  onChange={(e) => setMemberName(e.target.value)}
-                  placeholder="Enter your name"
-                  className="w-full rounded-lg px-3 py-2 text-sm"
-                />
-                {ratingErrors.name && <p className="text-red-400 text-xs mt-1">{ratingErrors.name}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-port-300 mb-1">Rating<span className="text-port-500 ml-0.5">*</span></label>
-                <StarRating rating={newRating} size="lg" interactive onChange={setNewRating} />
-                {newRating > 0 && <span className="text-sm text-gold-400 ml-1">{newRating}/10</span>}
-                {ratingErrors.rating && <p className="text-red-400 text-xs mt-1">{ratingErrors.rating}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-port-300 mb-1">Tasting Notes</label>
-                <textarea
-                  value={newNotes}
-                  onChange={(e) => setNewNotes(e.target.value)}
-                  rows={3}
-                  placeholder="Your impressions, flavors, finish..."
-                  className="w-full rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
-              <button type="submit" disabled={submitting} className="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-gold-600 text-port-950 font-medium hover:bg-gold-500 transition text-sm disabled:opacity-50">
-                {submitting ? 'Saving...' : 'Submit Rating'}
-              </button>
-            </form>
+            {(() => {
+              const userName = currentUserName || localStorage.getItem('pc_member') || '';
+              const userRating = ratings.find(r => r.memberName === userName);
+              const hasRated = !!userRating;
+              const showForm = !hasRated || ratingFormExpanded;
+              return showForm ? (
+                <div>
+                  <h3 className="font-display text-xl text-port-100 mb-4">{hasRated ? 'Edit Your Rating' : 'Add Your Rating'}</h3>
+                  <form onSubmit={submitRating} className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-port-300 mb-1">Your Name<span className="text-port-500 ml-0.5">*</span></label>
+                      <input
+                        type="text"
+                        value={memberName}
+                        onChange={(e) => setMemberName(e.target.value)}
+                        placeholder="Enter your name"
+                        className="w-full rounded-lg px-3 py-2 text-sm"
+                      />
+                      {ratingErrors.name && <p className="text-red-400 text-xs mt-1">{ratingErrors.name}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-port-300 mb-1">Rating<span className="text-port-500 ml-0.5">*</span></label>
+                      <StarRating rating={newRating} size="lg" interactive onChange={setNewRating} />
+                      {newRating > 0 && <span className="text-sm text-gold-400 ml-1">{newRating}/10</span>}
+                      {ratingErrors.rating && <p className="text-red-400 text-xs mt-1">{ratingErrors.rating}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-port-300 mb-1">Tasting Notes</label>
+                      <textarea
+                        value={newNotes}
+                        onChange={(e) => setNewNotes(e.target.value)}
+                        rows={3}
+                        placeholder="Your impressions, flavors, finish..."
+                        className="w-full rounded-lg px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="submit" disabled={submitting} className="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-gold-600 text-port-950 font-medium hover:bg-gold-500 transition text-sm disabled:opacity-50">
+                        {submitting ? 'Saving...' : 'Submit Rating'}
+                      </button>
+                      {hasRated && (
+                        <button type="button" onClick={() => setRatingFormExpanded(false)} className="px-5 py-2.5 rounded-lg glass-light text-port-300 hover:bg-white/10 transition text-sm">Cancel</button>
+                      )}
+                    </div>
+                  </form>
+                </div>
+              ) : (
+                <div>
+                  <h3 className="font-display text-xl text-port-100 mb-4">Your Rating</h3>
+                  <button
+                    onClick={() => setRatingFormExpanded(true)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg glass-light text-port-200 hover:bg-white/10 transition text-sm"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                    Edit My Rating
+                  </button>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Tasted At Meetings */}
@@ -1389,6 +1433,7 @@
       const [rsvpStatus, setRsvpStatus] = useState('yes');
       const [rsvpBringing, setRsvpBringing] = useState('');
       const [rsvpErrors, setRsvpErrors] = useState({});
+      const [rsvpFormExpanded, setRsvpFormExpanded] = useState(false);
       // Attachments
       const [deleteAttId, setDeleteAttId] = useState(null);
       const [previewAtt, setPreviewAtt] = useState(null);
@@ -1432,6 +1477,7 @@
         if (ok) {
           setMeeting(newMeeting);
           setRsvpBringing('');
+          setRsvpFormExpanded(false);
           showToast('RSVP saved!');
         } else {
           showToast('Failed to save RSVP', 'error');
@@ -1689,32 +1735,54 @@
                 ))}
               </div>
             )}
-            <h4 className="text-sm font-medium text-port-300 mb-3">Add Your RSVP</h4>
-            <form onSubmit={submitRsvp} className="space-y-3">
-              <div>
-                <input type="text" value={rsvpName} onChange={e => setRsvpName(e.target.value)} placeholder="Your name" className="w-full rounded-lg px-3 py-2 text-sm" />
-                {rsvpErrors.name && <p className="text-red-400 text-xs mt-1">{rsvpErrors.name}</p>}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-port-300 mb-2">Attending?</label>
-                <div className="flex gap-2">
-                  {[{ v: 'yes', l: 'Yes', c: 'emerald' }, { v: 'maybe', l: 'Maybe', c: 'gold' }, { v: 'no', l: 'No', c: 'red' }].map(opt => (
-                    <button key={opt.v} type="button" onClick={() => setRsvpStatus(opt.v)}
-                      className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${
-                        rsvpStatus === opt.v
-                          ? opt.c === 'emerald' ? 'bg-emerald-900/60 text-emerald-400 border border-emerald-500/30'
-                          : opt.c === 'gold' ? 'bg-yellow-900/60 text-gold-400 border border-gold-500/30'
-                          : 'bg-red-900/60 text-red-400 border border-red-500/30'
-                          : 'glass-light text-port-300 border border-transparent hover:bg-white/5'
-                      }`}>{opt.l}</button>
-                  ))}
+            {(() => {
+              const userRsvp = attendees.find(a => a.name === (currentUserName || localStorage.getItem('pc_member') || ''));
+              const hasRsvped = !!userRsvp;
+              const showForm = !hasRsvped || rsvpFormExpanded;
+              return showForm ? (
+                <div>
+                  <h4 className="text-sm font-medium text-port-300 mb-3">{hasRsvped ? 'Edit Your RSVP' : 'Add Your RSVP'}</h4>
+                  <form onSubmit={submitRsvp} className="space-y-3">
+                    <div>
+                      <input type="text" value={rsvpName} onChange={e => setRsvpName(e.target.value)} placeholder="Your name" className="w-full rounded-lg px-3 py-2 text-sm" />
+                      {rsvpErrors.name && <p className="text-red-400 text-xs mt-1">{rsvpErrors.name}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-port-300 mb-2">Attending?</label>
+                      <div className="flex gap-2">
+                        {[{ v: 'yes', l: 'Yes', c: 'emerald' }, { v: 'maybe', l: 'Maybe', c: 'gold' }, { v: 'no', l: 'No', c: 'red' }].map(opt => (
+                          <button key={opt.v} type="button" onClick={() => setRsvpStatus(opt.v)}
+                            className={`px-4 py-1.5 rounded-full text-sm font-medium transition ${
+                              rsvpStatus === opt.v
+                                ? opt.c === 'emerald' ? 'bg-emerald-900/60 text-emerald-400 border border-emerald-500/30'
+                                : opt.c === 'gold' ? 'bg-yellow-900/60 text-gold-400 border border-gold-500/30'
+                                : 'bg-red-900/60 text-red-400 border border-red-500/30'
+                                : 'glass-light text-port-300 border border-transparent hover:bg-white/5'
+                            }`}>{opt.l}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <input type="text" value={rsvpBringing} onChange={e => setRsvpBringing(e.target.value)} placeholder="What are you bringing? (optional)" className="w-full rounded-lg px-3 py-2 text-sm" />
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="submit" className="px-5 py-2.5 rounded-lg bg-gold-600 text-port-950 font-medium hover:bg-gold-500 transition text-sm">Save RSVP</button>
+                      {hasRsvped && (
+                        <button type="button" onClick={() => setRsvpFormExpanded(false)} className="px-5 py-2.5 rounded-lg glass-light text-port-300 hover:bg-white/10 transition text-sm">Cancel</button>
+                      )}
+                    </div>
+                  </form>
                 </div>
-              </div>
-              <div>
-                <input type="text" value={rsvpBringing} onChange={e => setRsvpBringing(e.target.value)} placeholder="What are you bringing? (optional)" className="w-full rounded-lg px-3 py-2 text-sm" />
-              </div>
-              <button type="submit" className="px-5 py-2.5 rounded-lg bg-gold-600 text-port-950 font-medium hover:bg-gold-500 transition text-sm">Save RSVP</button>
-            </form>
+              ) : (
+                <button
+                  onClick={() => setRsvpFormExpanded(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg glass-light text-port-200 hover:bg-white/10 transition text-sm"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                  Edit My RSVP
+                </button>
+              );
+            })()}
           </div>
 
           {/* Ports Tasted */}
@@ -1825,8 +1893,10 @@
         setError('');
         setLoading(true);
         try {
-          const normalized = phoneNumber.replace(/\s/g, '');
-          if (!normalized.startsWith('+')) throw new Error('Phone number must include country code (e.g., +44...)');
+          const digits = phoneNumber.replace(/\D/g, '');
+          if (!digits.startsWith('07')) throw new Error('UK mobile numbers should start with 07');
+          if (digits.length !== 11) throw new Error('Please enter a valid 11-digit UK mobile number (e.g., 07123 456789)');
+          const normalized = '+44' + digits.substring(1);
           if (!isPhoneApproved(normalized)) throw new Error('This phone number is not authorized. Please contact an administrator.');
 
           // Create fresh invisible reCAPTCHA verifier
@@ -1903,17 +1973,21 @@
             {step === 'phone' && (
               <>
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-port-300 mb-1">Phone Number</label>
+                  <label className="block text-sm font-medium text-port-300 mb-1">UK Mobile Number</label>
                   <input
                     type="tel"
-                    placeholder="+44 7123 456789"
+                    placeholder="07123 456789"
                     value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    onChange={(e) => {
+                      let digits = e.target.value.replace(/\D/g, '');
+                      if (digits.length > 11) digits = digits.substring(0, 11);
+                      setPhoneNumber(digits);
+                    }}
                     className="w-full rounded-lg px-3 py-2.5 text-sm"
                     disabled={loading}
                     onKeyDown={(e) => e.key === 'Enter' && phoneNumber && sendCode()}
                   />
-                  <p className="text-port-500 text-xs mt-1.5">Include country code (e.g., +44 for UK)</p>
+                  <p className="text-port-500 text-xs mt-1.5">Enter your 11-digit UK mobile (e.g., 07123 456789)</p>
                 </div>
                 <div id="recaptcha-container"></div>
                 <button
