@@ -47,7 +47,8 @@
     /* ── Base body styles ── */
     body {
       font-family: 'Inter', sans-serif;
-      background: #1a0a10;
+      background: linear-gradient(135deg, #1a0505 0%, #2d0a0a 100%);
+      background-attachment: fixed;
       position: relative;
       min-height: 100vh;
     }
@@ -99,7 +100,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(160deg, #1a0505 0%, #2d0a0a 40%, #1f0608 100%);
+      background: linear-gradient(135deg, #1a0505 0%, #2d0a0a 100%);
       transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
     }
     .landing.exit {
@@ -1963,7 +1964,7 @@
       };
 
       return (
-        <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(160deg, #1a0505 0%, #2d0a0a 40%, #1f0608 100%)' }}>
+        <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #1a0505 0%, #2d0a0a 100%)' }}>
           <div className="glass rounded-2xl p-8 max-w-sm w-full fade-in">
             <h1 className="font-display text-3xl text-port-100 text-center mb-1">Port Committee</h1>
             <p className="text-port-400 text-center text-sm mb-8">
