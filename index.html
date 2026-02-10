@@ -3142,9 +3142,41 @@
       const [toast, setToast] = useState(null);
       const [quickRate, setQuickRate] = useState(null);
 
+      // Garrafeira entrance video (skip for deep links)
+      const skipGarrafeiraVideo = section !== 'garrafeira' || !!initialNav;
+      const garrafeiraVideoRef = useRef(null);
+      const [gVideoPhase, setGVideoPhase] = useState(skipGarrafeiraVideo ? 'complete' : 'loading');
+      const [gShowContent, setGShowContent] = useState(skipGarrafeiraVideo);
+      const [gVideoLoaded, setGVideoLoaded] = useState(false);
+
       const showToast = useCallback((message, type = 'success') => {
         setToast({ message, type });
       }, []);
+
+      // Garrafeira entrance video sequence
+      useEffect(() => {
+        if (skipGarrafeiraVideo || !gVideoLoaded) return;
+        setGVideoPhase('fade-in');
+        const t1 = setTimeout(() => setGVideoPhase('playing'), 500);
+        const t2 = setTimeout(() => {
+          setGVideoPhase('fade-out');
+          setGShowContent(true);
+        }, 2500);
+        const t3 = setTimeout(() => setGVideoPhase('complete'), 3000);
+        return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+      }, [gVideoLoaded, skipGarrafeiraVideo]);
+
+      // Fallback: skip garrafeira video if it doesn't load within 3s
+      useEffect(() => {
+        if (skipGarrafeiraVideo) return;
+        const fallback = setTimeout(() => {
+          if (!gVideoLoaded) {
+            setGVideoPhase('complete');
+            setGShowContent(true);
+          }
+        }, 3000);
+        return () => clearTimeout(fallback);
+      }, [gVideoLoaded, skipGarrafeiraVideo]);
 
       const sectionTitle = section === 'garrafeira' ? 'Garrafeira' : 'Meetings';
       const isPortsSection = section === 'garrafeira';
@@ -3217,8 +3249,58 @@
         }
       };
 
+      const GARRAFEIRA_VIDEO_URL = 'https://firebasestorage.googleapis.com/v0/b/port-committee.firebasestorage.app/o/Assets%2Fgarrafeira-entrance.mp4?alt=media&token=f5d0abdd-18d5-4fa7-99a1-8e65b3d20be0';
+      const gVideoOpacity = { loading: 0, 'fade-in': 0, playing: 1, 'fade-out': 0.1, complete: 0.1 }[gVideoPhase] ?? 0.1;
+      const gVideoTransition = gVideoPhase === 'fade-in' ? 'opacity 0.5s ease-in' : gVideoPhase === 'fade-out' ? 'opacity 0.5s ease-out' : 'none';
+
       return (
-        <div className="min-h-screen section-enter">
+        <div className="min-h-screen section-enter" style={isPortsSection ? { position: 'relative', overflow: 'hidden' } : undefined}>
+          {/* Garrafeira Video Background */}
+          {isPortsSection && (
+            <video
+              ref={garrafeiraVideoRef}
+              autoPlay
+              muted
+              loop
+              playsInline
+              onLoadedData={() => setGVideoLoaded(true)}
+              style={{
+                position: 'fixed',
+                top: '50%',
+                left: '50%',
+                minWidth: '100%',
+                minHeight: '100%',
+                width: 'auto',
+                height: 'auto',
+                transform: 'translate(-50%, -50%)',
+                objectFit: 'cover',
+                zIndex: 0,
+                opacity: gVideoLoaded ? gVideoOpacity : 0,
+                transition: gVideoTransition,
+                pointerEvents: 'none',
+              }}
+            >
+              <source src={GARRAFEIRA_VIDEO_URL} type="video/mp4" />
+            </video>
+          )}
+          {isPortsSection && (
+            <div style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(26, 5, 5, 0.35)',
+              zIndex: 1,
+              pointerEvents: 'none',
+            }} />
+          )}
+
+          {/* App Content */}
+          <div style={isPortsSection ? {
+            position: 'relative',
+            zIndex: 2,
+            opacity: gShowContent ? 1 : 0,
+            transition: 'opacity 0.5s ease-in',
+            pointerEvents: gShowContent ? 'auto' : 'none',
+          } : undefined}>
           {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
           {quickRate && (
             <QuickRateModal
@@ -3356,6 +3438,7 @@
           <footer className="max-w-5xl mx-auto px-4 py-4 text-center">
             <p className="text-port-500 text-xs">Cloud storage &mdash; data is shared across all Port Committee members.</p>
           </footer>
+          </div>{/* end content wrapper */}
         </div>
       );
     }
