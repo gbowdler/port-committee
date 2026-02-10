@@ -3158,12 +3158,16 @@
         if (skipGarrafeiraVideo || !gVideoLoaded) return;
         setGVideoPhase('fade-in');
         const t1 = setTimeout(() => setGVideoPhase('playing'), 500);
+        // Subtle slow-motion at 0.75s
+        const tSlow = setTimeout(() => {
+          if (garrafeiraVideoRef.current) garrafeiraVideoRef.current.playbackRate = 0.8;
+        }, 750);
         const t2 = setTimeout(() => {
           setGVideoPhase('fade-out');
           setGShowContent(true);
-        }, 2500);
-        const t3 = setTimeout(() => setGVideoPhase('complete'), 3000);
-        return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+        }, 1250);
+        const t3 = setTimeout(() => setGVideoPhase('complete'), 2250);
+        return () => { clearTimeout(t1); clearTimeout(tSlow); clearTimeout(t2); clearTimeout(t3); };
       }, [gVideoLoaded, skipGarrafeiraVideo]);
 
       // Fallback: skip garrafeira video if it doesn't load within 3s
@@ -3251,7 +3255,7 @@
 
       const GARRAFEIRA_VIDEO_URL = 'https://firebasestorage.googleapis.com/v0/b/port-committee.firebasestorage.app/o/Assets%2Fgarrafeira-entrance.mp4?alt=media&token=f5d0abdd-18d5-4fa7-99a1-8e65b3d20be0';
       const gVideoOpacity = { loading: 0, 'fade-in': 0, playing: 1, 'fade-out': 0.1, complete: 0.1 }[gVideoPhase] ?? 0.1;
-      const gVideoTransition = gVideoPhase === 'fade-in' ? 'opacity 0.5s ease-in' : gVideoPhase === 'fade-out' ? 'opacity 0.5s ease-out' : 'none';
+      const gVideoTransition = gVideoPhase === 'fade-in' ? 'opacity 0.5s ease-in' : gVideoPhase === 'fade-out' ? 'opacity 1s ease-out' : 'none';
 
       return (
         <div className="min-h-screen section-enter" style={isPortsSection ? { position: 'relative', overflow: 'hidden' } : undefined}>
