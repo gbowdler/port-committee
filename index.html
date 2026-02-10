@@ -3258,7 +3258,7 @@
       const gVideoTransition = gVideoPhase === 'fade-in' ? 'opacity 0.5s ease-in' : gVideoPhase === 'fade-out' ? 'opacity 1s ease-out' : 'none';
 
       return (
-        <div className="min-h-screen section-enter" style={isPortsSection ? { position: 'relative', overflow: 'hidden' } : undefined}>
+        <div className={isPortsSection ? 'min-h-screen' : 'min-h-screen section-enter'} style={isPortsSection ? { position: 'relative', overflow: 'hidden' } : undefined}>
           {/* Garrafeira Video Background */}
           {isPortsSection && (
             <video
@@ -3301,6 +3301,7 @@
             position: 'relative',
             zIndex: 2,
             opacity: gShowContent ? 1 : 0,
+            visibility: gShowContent ? 'visible' : 'hidden',
             transition: 'opacity 0.5s ease-in',
             pointerEvents: gShowContent ? 'auto' : 'none',
           } : undefined}>
