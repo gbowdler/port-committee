@@ -3154,19 +3154,22 @@
       }, []);
 
       // Garrafeira entrance video sequence
+      if (isPortsSection) console.log('[Garrafeira] render:', { gVideoPhase, gShowContent, gVideoLoaded, skipGarrafeiraVideo });
       useEffect(() => {
         if (skipGarrafeiraVideo || !gVideoLoaded) return;
+        console.log('[Garrafeira] starting entrance sequence');
         setGVideoPhase('fade-in');
-        const t1 = setTimeout(() => setGVideoPhase('playing'), 500);
-        // Subtle slow-motion at 0.75s
+        const t1 = setTimeout(() => { console.log('[Garrafeira] 500ms: playing'); setGVideoPhase('playing'); }, 500);
         const tSlow = setTimeout(() => {
+          console.log('[Garrafeira] 750ms: slow-motion 0.8x');
           if (garrafeiraVideoRef.current) garrafeiraVideoRef.current.playbackRate = 0.8;
         }, 750);
         const t2 = setTimeout(() => {
+          console.log('[Garrafeira] 1250ms: fade-out + showContent');
           setGVideoPhase('fade-out');
           setGShowContent(true);
         }, 1250);
-        const t3 = setTimeout(() => setGVideoPhase('complete'), 2250);
+        const t3 = setTimeout(() => { console.log('[Garrafeira] 2250ms: complete'); setGVideoPhase('complete'); }, 2250);
         return () => { clearTimeout(t1); clearTimeout(tSlow); clearTimeout(t2); clearTimeout(t3); };
       }, [gVideoLoaded, skipGarrafeiraVideo]);
 
@@ -3266,7 +3269,9 @@
               autoPlay
               muted
               playsInline
-              onLoadedData={() => setGVideoLoaded(true)}
+              onLoadedData={() => { console.log('[Garrafeira] video onLoadedData'); setGVideoLoaded(true); }}
+              onPlay={() => console.log('[Garrafeira] video onPlay')}
+              onEnded={() => console.log('[Garrafeira] video onEnded')}
               style={{
                 position: 'fixed',
                 top: '50%',
@@ -3297,13 +3302,16 @@
           )}
 
           {/* App Content */}
-          <div style={isPortsSection ? {
+          <div
+            ref={isPortsSection ? (el) => { if (el) console.log('[Garrafeira] content div mounted, gShowContent:', gShowContent); } : undefined}
+            style={isPortsSection ? {
             position: 'relative',
             zIndex: 2,
             opacity: gShowContent ? 1 : 0,
             visibility: gShowContent ? 'visible' : 'hidden',
             transition: 'opacity 0.5s ease-in',
             pointerEvents: gShowContent ? 'auto' : 'none',
+            border: '3px solid blue', // DEBUG
           } : undefined}>
           {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
           {quickRate && (
