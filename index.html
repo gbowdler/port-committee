@@ -3147,6 +3147,7 @@
       const garrafeiraVideoRef = useRef(null);
       const [gVideoPhase, setGVideoPhase] = useState(skipGarrafeiraVideo ? 'complete' : 'loading');
       const [gShowContent, setGShowContent] = useState(skipGarrafeiraVideo);
+      const [gContentOpacity, setGContentOpacity] = useState(skipGarrafeiraVideo ? 1 : 0);
       const [gVideoLoaded, setGVideoLoaded] = useState(false);
 
       const showToast = useCallback((message, type = 'success') => {
@@ -3154,22 +3155,18 @@
       }, []);
 
       // Garrafeira entrance video sequence
-      if (isPortsSection) console.log('[Garrafeira] render:', { gVideoPhase, gShowContent, gVideoLoaded, skipGarrafeiraVideo });
       useEffect(() => {
         if (skipGarrafeiraVideo || !gVideoLoaded) return;
-        console.log('[Garrafeira] starting entrance sequence');
         setGVideoPhase('fade-in');
-        const t1 = setTimeout(() => { console.log('[Garrafeira] 500ms: playing'); setGVideoPhase('playing'); }, 500);
+        const t1 = setTimeout(() => setGVideoPhase('playing'), 500);
         const tSlow = setTimeout(() => {
-          console.log('[Garrafeira] 750ms: slow-motion 0.8x');
           if (garrafeiraVideoRef.current) garrafeiraVideoRef.current.playbackRate = 0.8;
         }, 750);
         const t2 = setTimeout(() => {
-          console.log('[Garrafeira] 1250ms: fade-out + showContent');
           setGVideoPhase('fade-out');
           setGShowContent(true);
         }, 1250);
-        const t3 = setTimeout(() => { console.log('[Garrafeira] 2250ms: complete'); setGVideoPhase('complete'); }, 2250);
+        const t3 = setTimeout(() => setGVideoPhase('complete'), 2250);
         return () => { clearTimeout(t1); clearTimeout(tSlow); clearTimeout(t2); clearTimeout(t3); };
       }, [gVideoLoaded, skipGarrafeiraVideo]);
 
@@ -3184,6 +3181,13 @@
         }, 3000);
         return () => clearTimeout(fallback);
       }, [gVideoLoaded, skipGarrafeiraVideo]);
+
+      // Fade in content after it mounts
+      useEffect(() => {
+        if (!gShowContent || skipGarrafeiraVideo) return;
+        const raf = requestAnimationFrame(() => setGContentOpacity(1));
+        return () => cancelAnimationFrame(raf);
+      }, [gShowContent, skipGarrafeiraVideo]);
 
       const sectionTitle = section === 'garrafeira' ? 'Garrafeira' : 'Meetings';
       const isPortsSection = section === 'garrafeira';
@@ -3269,9 +3273,7 @@
               autoPlay
               muted
               playsInline
-              onLoadedData={() => { console.log('[Garrafeira] video onLoadedData'); setGVideoLoaded(true); }}
-              onPlay={() => console.log('[Garrafeira] video onPlay')}
-              onEnded={() => console.log('[Garrafeira] video onEnded')}
+              onLoadedData={() => setGVideoLoaded(true)}
               style={{
                 position: 'fixed',
                 top: '50%',
@@ -3301,17 +3303,14 @@
             }} />
           )}
 
-          {/* App Content */}
-          <div
-            ref={isPortsSection ? (el) => { if (el) console.log('[Garrafeira] content div mounted, gShowContent:', gShowContent); } : undefined}
-            style={isPortsSection ? {
+          {/* App Content — only mounts after garrafeira entrance completes */}
+          {(!isPortsSection || gShowContent) && (
+          <div style={isPortsSection ? {
             position: 'relative',
             zIndex: 2,
-            opacity: gShowContent ? 1 : 0,
-            visibility: gShowContent ? 'visible' : 'hidden',
+            opacity: gContentOpacity,
             transition: 'opacity 0.5s ease-in',
-            pointerEvents: gShowContent ? 'auto' : 'none',
-            border: '3px solid blue', // DEBUG
+            pointerEvents: gContentOpacity ? 'auto' : 'none',
           } : undefined}>
           {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
           {quickRate && (
@@ -3450,7 +3449,7 @@
           <footer className="max-w-5xl mx-auto px-4 py-4 text-center">
             <p className="text-port-500 text-xs">Cloud storage &mdash; data is shared across all Port Committee members.</p>
           </footer>
-          </div>{/* end content wrapper */}
+          </div>)}
         </div>
       );
     }
