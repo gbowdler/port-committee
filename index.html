@@ -3195,6 +3195,9 @@
         setToast({ message, type });
       }, []);
 
+      // Detect mobile for playbackRate skip (causes stutter on mobile)
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
       // Entrance video sequence (section-specific timing)
       useEffect(() => {
         if (skipEntrance || !eVideoLoaded) return;
@@ -3205,21 +3208,24 @@
         const doneMs   = isMeetingsSection ? 2750 : 2250;
         const t1 = setTimeout(() => setEVideoPhase('playing'), 500);
         const tSlow = setTimeout(() => {
-          if (entranceVideoRef.current) entranceVideoRef.current.playbackRate = 0.8;
+          // Skip playbackRate change on mobile - causes video stutter/restart
+          if (entranceVideoRef.current && !isMobile) {
+            try { entranceVideoRef.current.playbackRate = 0.8; } catch (e) { /* ignore */ }
+          }
         }, slowMs);
         const t2 = setTimeout(() => setEVideoPhase('fade-out'), fadeOutMs);
         const t3 = setTimeout(() => setEVideoPhase('complete'), doneMs);
         return () => { clearTimeout(t1); clearTimeout(tSlow); clearTimeout(t2); clearTimeout(t3); };
       }, [eVideoLoaded, skipEntrance, isMeetingsSection]);
 
-      // Fallback: skip entrance if video doesn't load within 3s
+      // Fallback: skip entrance if video doesn't load (longer timeout on mobile)
       useEffect(() => {
         if (skipEntrance) return;
         const fallback = setTimeout(() => {
           if (!eVideoLoaded) {
             setEVideoPhase('complete');
           }
-        }, 3000);
+        }, isMobile ? 5000 : 3000);
         return () => clearTimeout(fallback);
       }, [eVideoLoaded, skipEntrance]);
 
@@ -3323,7 +3329,8 @@
               autoPlay
               muted
               playsInline
-              onLoadedData={() => setEVideoLoaded(true)}
+              preload="auto"
+              onCanPlay={() => setEVideoLoaded(true)}
               style={{
                 position: 'fixed',
                 top: '50%',
