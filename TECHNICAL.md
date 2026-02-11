@@ -253,8 +253,13 @@ This is a special document stored directly (not through the `storage` helper) at
 | Meeting photos | `meetings/{meetingId}/photos/{timestamp}_{filename}` |
 | Library documents | `library/{docId}/{timestamp}_{filename}` |
 | Dashboard video | `Assets/douro-background.mp4` |
+| Garrafeira entrance video | `Assets/garrafeira-entrance.mp4` |
+| Meetings entrance video | `Assets/meetings-entrance.mp4` |
+| Library entrance video | `Assets/library-entrance.mp4` |
 
 Port photos are **not** stored in Firebase Storage. They are compressed to base64 data URLs and stored inline in the Firestore document (subject to the 1MB Firestore document size limit).
+
+**Video assets total ~15-20MB.** Videos are cached by the browser after first load.
 
 ---
 
@@ -286,14 +291,14 @@ Root
 | `LandingPage` | `onEnter` | Cinematic entry with random subheading, exit animation |
 | `Dashboard` | `onSelectSection, currentUserName, onLogout` | Section cards with video background + sign out |
 | `StorageUsage` | - | Displays storage stats from Firestore |
-| `App` | `section, onBack, initialNav, onNavigateToSection, currentUserName, showToast` | Main section container for Garrafeira and Meetings |
-| `LibrarySection` | `onBack, currentUserName, showToast` | Self-contained library with upload, search, filter, preview, delete |
-| `PortList` | `onSelect, onAdd` | Searchable/filterable/sortable port grid |
+| `App` | `section, onBack, initialNav, onNavigateToSection, currentUserName` | Main section container for Garrafeira and Meetings; includes shared entrance video system |
+| `LibrarySection` | `onBack, currentUserName` | Self-contained library with entrance video, upload, search, filter, preview, delete |
+| `PortList` | `onSelect, onAdd, initialPorts?, initialRatings?` | Searchable/filterable/sortable port grid; accepts pre-loaded data to skip loading spinner |
 | `PortCard` | `port, avgRating, ratingCount, onClick, onQuickRate` | Port list item card |
 | `PortDetail` | `portId, onBack, onEdit, onDelete, showToast, onNavigateToMeeting, currentUserName` | Full port view with collapsible ratings |
 | `PortForm` | `port?, onSave, onCancel` | Add/edit port form with photo upload, official notes, year/age |
 | `QuickRateModal` | `port, onClose, onSaved` | Quick rating modal from port list |
-| `MeetingList` | `onSelect, onAdd` | Meetings split into Upcoming/Past sections |
+| `MeetingList` | `onSelect, onAdd, initialMeetings?` | Meetings split into Upcoming/Past sections; accepts pre-loaded data |
 | `MeetingCard` | `meeting, onClick` | Meeting list item card |
 | `MeetingDetail` | `meetingId, onBack, onEdit, showToast, onNavigateToPort, currentUserName` | Full meeting view with collapsible RSVP, photos, attachments |
 | `MeetingForm` | `meeting?, onSave, onCancel` | Add/edit meeting form |
@@ -307,15 +312,24 @@ Root
 
 ---
 
-## Dashboard Video Background
+## Video System
 
-The dashboard features a cinematic entrance with a Douro Valley video.
+The app features cinematic entrance videos across all sections. Each section has its own themed video that plays on entry, then fades to a subtle watermark background.
 
-- **Source:** MP4 hosted in Firebase Storage at `Assets/douro-background.mp4`
+### Entrance Video Flow
+
+```
+User clicks section → Video loads + data loads (parallel) →
+Video plays entrance sequence → Video fades to 10% watermark →
+Content fades in → Static watermark background while browsing
+```
+
+### Dashboard Video
+
+- **Source:** `Assets/douro-background.mp4` (Portugal/Douro Valley theme)
 - **Session tracking:** `_dashboardVideoSeen` ref ensures video only plays on first dashboard visit per session
 - **Fallback:** 3-second timeout skips to content if video fails to load
 
-**Timeline:**
 | Time | Phase | Video Opacity | Content |
 |------|-------|---------------|---------|
 | 0-0.5s | `fade-in` | 0 → 1 | Hidden |
@@ -324,6 +338,76 @@ The dashboard features a cinematic entrance with a Douro Valley video.
 | 4s+ | `complete` | 0.08 | Fully interactive |
 
 **CSS gating:** Dashboard card/title animations are gated behind `.dashboard-content-visible` class, which is only added when `showContent` becomes true.
+
+### Section Entrance Videos
+
+Garrafeira and Meetings share a unified entrance system in the `App` component. Library has its own self-contained entrance in `LibrarySection`.
+
+| Section | Video Source | Total Duration | Full Brightness |
+|---------|-------------|----------------|-----------------|
+| Garrafeira | `Assets/garrafeira-entrance.mp4` | 2.25s | 0.75s |
+| Meetings | `Assets/meetings-entrance.mp4` | 2.75s | 1.25s |
+| Library | `Assets/library-entrance.mp4` | 2.75s | 1.25s |
+
+**Garrafeira timeline:** 0.5s fade-in → 0.75s full brightness → 1s fade to watermark
+**Meetings/Library timeline:** 0.5s fade-in → 1.25s full brightness → 1s fade to watermark
+
+### Two-Phase Component Pattern (Early Return)
+
+Each section uses a two-phase early return pattern to completely separate entrance and content rendering. This prevents content from flickering during the video entrance.
+
+```
+Phase 1: entrance → Returns ONLY the video element (full-screen, z-index 9999)
+Phase 2: content  → Returns watermark video + dark overlay + content wrapper
+```
+
+**Key states (App component - shared for Garrafeira/Meetings):**
+- `ePhase`: `'entrance'` | `'content'`
+- `eVideoPhase`: `'loading'` → `'fade-in'` → `'playing'` → `'fade-out'` → `'complete'`
+- `eVideoLoaded`: triggered by `onCanPlay` event
+- `eContentOpacity`: 0 → 1 (animated via `requestAnimationFrame`)
+
+**Key states (LibrarySection - self-contained):**
+- `lPhase`, `lVideoPhase`, `lVideoLoaded`, `lContentOpacity` (same pattern, `l` prefix)
+
+### Parallel Data Loading
+
+Data loads in the background while the entrance video plays. Content only appears when BOTH the video sequence completes AND data is ready.
+
+- **Garrafeira:** Pre-loads ports and ratings into `preloadedPorts`/`preloadedRatings`, passed as `initialPorts`/`initialRatings` props to `PortList`
+- **Meetings:** Pre-loads meetings into `preloadedMeetings`, passed as `initialMeetings` prop to `MeetingList`
+- **Library:** Pre-loads docs into `preloadedDocs`, used to initialise `docs` state
+
+### Mobile Optimisations
+
+- **Mobile detection:** `/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)`
+- **Skip `playbackRate` changes on mobile:** Changing playback speed mid-play causes video restart/stutter on mobile browsers
+- **`preload="auto"`:** Ensures video buffers before playback starts
+- **`onCanPlay` event:** Waits for sufficient buffered data before starting the sequence (instead of `onLoadedData`)
+- **`playsInline`:** Required for iOS Safari autoplay
+- **Extended fallback timeout:** 5s on mobile (vs 3s on desktop) for slower connections
+- **`try/catch` around `playbackRate`:** Graceful handling if browser doesn't support it
+
+### Deep Link Handling
+
+When navigating to a section via deep link (e.g., from a meeting to a specific port), the entrance video is skipped: `skipEntrance = !!initialNav`. This sets `ePhase` directly to `'content'` and `eContentOpacity` to 1.
+
+### Video Specifications
+
+For optimal mobile performance, videos should be:
+- **Format:** MP4 (H.264 codec)
+- **Resolution:** 720p (1280x720)
+- **Frame rate:** 24fps or 30fps
+- **Bitrate:** 1-2 Mbps
+- **Audio:** None (removed for smaller file size)
+- **Optimised:** `movflags +faststart` for web streaming
+
+```bash
+ffmpeg -i input.mp4 \
+  -vcodec h264 -preset slow -crf 28 \
+  -vf scale=1280:720 -r 24 -an \
+  -movflags +faststart output.mp4
+```
 
 ---
 
@@ -489,7 +573,11 @@ GitHub Pages serves the file automatically at `https://gbowdler.github.io/port-c
 - Firebase project on Blaze plan (for Storage and Auth)
 - Phone Authentication enabled in Firebase Console
 - Authorized domains configured for reCAPTCHA
-- Dashboard video uploaded to Firebase Storage (`Assets/` folder)
+- Video assets uploaded to Firebase Storage (`Assets/` folder):
+  - `douro-background.mp4` (dashboard)
+  - `garrafeira-entrance.mp4` (garrafeira section)
+  - `meetings-entrance.mp4` (meetings section)
+  - `library-entrance.mp4` (library section)
 - Phone number allowlist configured in code
 
 ---
@@ -513,3 +601,9 @@ GitHub Pages serves the file automatically at `https://gbowdler.github.io/port-c
 8. **Video session tracking**: `_dashboardVideoSeen` is a plain object `{ current: false }` outside the component to persist across re-renders without causing re-render cycles. Not a `useRef` because the Dashboard component unmounts when navigating to sections.
 
 9. **Collapsible form identity**: RSVP and rating forms identify the current user by matching `currentUserName` (from auth) or `localStorage('pc_member')` against existing entries. If a user changes their display name, their previous entries won't match.
+
+10. **Entrance video early return pattern**: Section entrance videos use an early return to ensure entrance and content JSX never coexist in the DOM. When `ePhase === 'entrance'`, the component returns ONLY the video element. This prevents content flickering that occurred with opacity-based hiding or conditional rendering within a shared render tree.
+
+11. **Mobile video `playbackRate` stutter**: Changing `video.playbackRate` mid-playback causes some mobile browsers to restart the video from the beginning. The slow-motion effect (0.8x) is disabled on mobile using user agent detection.
+
+12. **Section-specific entrance timing**: Garrafeira uses 2.25s total (shorter full brightness), while Meetings and Library use 2.75s (longer full brightness). The timing is controlled by `isMeetingsSection` ternary in the shared `App` component. Library has its own independent timing in `LibrarySection`.
