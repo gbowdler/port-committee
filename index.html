@@ -3142,25 +3142,20 @@
       const [toast, setToast] = useState(null);
       const [quickRate, setQuickRate] = useState(null);
 
-      // Garrafeira entrance video (skip for deep links)
-      const skipGarrafeiraVideo = section !== 'garrafeira' || !!initialNav;
+      // Garrafeira entrance video
+      const isPortsSection = section === 'garrafeira';
+      const skipEntrance = !isPortsSection || !!initialNav;
       const garrafeiraVideoRef = useRef(null);
-      const [gVideoPhase, setGVideoPhase] = useState(skipGarrafeiraVideo ? 'complete' : 'loading');
-      const [gEntranceDone, setGEntranceDone] = useState(skipGarrafeiraVideo);
-      const [gShowContent, setGShowContent] = useState(skipGarrafeiraVideo);
-      const [gContentOpacity, setGContentOpacity] = useState(skipGarrafeiraVideo ? 1 : 0);
+      const [gPhase, setGPhase] = useState(skipEntrance ? 'content' : 'entrance'); // 'entrance' | 'content'
+      const [gVideoPhase, setGVideoPhase] = useState('loading');
       const [gVideoLoaded, setGVideoLoaded] = useState(false);
+      const [gContentOpacity, setGContentOpacity] = useState(skipEntrance ? 1 : 0);
 
       // Pre-load port data during entrance video
       const [preloadedPorts, setPreloadedPorts] = useState(null);
       const [preloadedRatings, setPreloadedRatings] = useState(null);
-
-      if (section === 'garrafeira') console.log('[G] RENDER', { gVideoPhase, gEntranceDone, gShowContent, gContentOpacity, gVideoLoaded, preloadedPorts: preloadedPorts !== null ? preloadedPorts.length + ' ports' : null });
-
       useEffect(() => {
-        if (section !== 'garrafeira') return;
-        console.log('[G] starting data pre-load');
-        const t0 = Date.now();
+        if (!isPortsSection) return;
         (async () => {
           const ids = (await storage.get('ports:list')) || [];
           const portData = [];
@@ -3173,11 +3168,10 @@
               ratData[id] = r?.ratings || [];
             }
           }
-          console.log(`[G] data pre-loaded in ${Date.now() - t0}ms, ${portData.length} ports`);
           setPreloadedPorts(portData);
           setPreloadedRatings(ratData);
         })();
-      }, [section]);
+      }, [isPortsSection]);
 
       const showToast = useCallback((message, type = 'success') => {
         setToast({ message, type });
@@ -3185,55 +3179,44 @@
 
       // Garrafeira entrance video sequence
       useEffect(() => {
-        if (skipGarrafeiraVideo || !gVideoLoaded) return;
-        console.log('[G] video sequence starting');
+        if (skipEntrance || !gVideoLoaded) return;
         setGVideoPhase('fade-in');
-        const t1 = setTimeout(() => { console.log('[G] 500ms: playing'); setGVideoPhase('playing'); }, 500);
+        const t1 = setTimeout(() => setGVideoPhase('playing'), 500);
         const tSlow = setTimeout(() => {
-          console.log('[G] 750ms: slow-motion');
           if (garrafeiraVideoRef.current) garrafeiraVideoRef.current.playbackRate = 0.8;
         }, 750);
-        const t2 = setTimeout(() => {
-          console.log('[G] 1250ms: fade-out + entranceDone');
-          setGVideoPhase('fade-out');
-          setGEntranceDone(true);
-        }, 1250);
-        const t3 = setTimeout(() => { console.log('[G] 2250ms: complete'); setGVideoPhase('complete'); }, 2250);
+        const t2 = setTimeout(() => setGVideoPhase('fade-out'), 1250);
+        const t3 = setTimeout(() => setGVideoPhase('complete'), 2250);
         return () => { clearTimeout(t1); clearTimeout(tSlow); clearTimeout(t2); clearTimeout(t3); };
-      }, [gVideoLoaded, skipGarrafeiraVideo]);
+      }, [gVideoLoaded, skipEntrance]);
 
-      // Fallback: skip garrafeira video if it doesn't load within 3s
+      // Fallback: skip entrance if video doesn't load within 3s
       useEffect(() => {
-        if (skipGarrafeiraVideo) return;
+        if (skipEntrance) return;
         const fallback = setTimeout(() => {
           if (!gVideoLoaded) {
-            console.log('[G] fallback: video did not load in 3s, skipping');
             setGVideoPhase('complete');
-            setGEntranceDone(true);
           }
         }, 3000);
         return () => clearTimeout(fallback);
-      }, [gVideoLoaded, skipGarrafeiraVideo]);
+      }, [gVideoLoaded, skipEntrance]);
 
-      // Show content when BOTH entrance done AND data loaded
+      // Transition to content when video done AND data loaded
       useEffect(() => {
-        console.log('[G] show-content check:', { gEntranceDone, dataReady: preloadedPorts !== null, gShowContent });
-        if (gEntranceDone && preloadedPorts !== null && !gShowContent) {
-          console.log('[G] BOTH READY → setGShowContent(true)');
-          setGShowContent(true);
+        if (gPhase !== 'entrance') return;
+        if (gVideoPhase === 'complete' && preloadedPorts !== null) {
+          setGPhase('content');
         }
-      }, [gEntranceDone, preloadedPorts, gShowContent]);
+      }, [gPhase, gVideoPhase, preloadedPorts]);
 
       // Fade in content after it mounts
       useEffect(() => {
-        if (!gShowContent || skipGarrafeiraVideo) return;
-        console.log('[G] content mounted → fading in via rAF');
-        const raf = requestAnimationFrame(() => { console.log('[G] rAF → setGContentOpacity(1)'); setGContentOpacity(1); });
+        if (gPhase !== 'content' || skipEntrance) return;
+        const raf = requestAnimationFrame(() => setGContentOpacity(1));
         return () => cancelAnimationFrame(raf);
-      }, [gShowContent, skipGarrafeiraVideo]);
+      }, [gPhase, skipEntrance]);
 
-      const sectionTitle = section === 'garrafeira' ? 'Garrafeira' : 'Meetings';
-      const isPortsSection = section === 'garrafeira';
+      const sectionTitle = isPortsSection ? 'Garrafeira' : 'Meetings';
       const isMeetingsSection = section === 'meetings';
 
       const handleAddPort = async (data) => {
@@ -3304,19 +3287,50 @@
       };
 
       const GARRAFEIRA_VIDEO_URL = 'https://firebasestorage.googleapis.com/v0/b/port-committee.firebasestorage.app/o/Assets%2Fgarrafeira-entrance.mp4?alt=media&token=f5d0abdd-18d5-4fa7-99a1-8e65b3d20be0';
-      const gVideoOpacity = { loading: 0, 'fade-in': 0, playing: 1, 'fade-out': 0.1, complete: 0.1 }[gVideoPhase] ?? 0.1;
-      const gVideoTransition = gVideoPhase === 'fade-in' ? 'opacity 0.5s ease-in' : gVideoPhase === 'fade-out' ? 'opacity 1s ease-out' : 'none';
 
-      return (
-        <div className={isPortsSection ? 'min-h-screen' : 'min-h-screen section-enter'} style={isPortsSection ? { position: 'relative', overflow: 'hidden' } : undefined}>
-          {/* Garrafeira Video Background */}
-          {isPortsSection && (
+      // ── Garrafeira entrance: completely separate early return ──
+      if (isPortsSection && gPhase === 'entrance') {
+        const eOpacity = { loading: 0, 'fade-in': 0, playing: 1, 'fade-out': 0.1, complete: 0.1 }[gVideoPhase] ?? 0;
+        const eTransition = gVideoPhase === 'fade-in' ? 'opacity 0.5s ease-in' : gVideoPhase === 'fade-out' ? 'opacity 1s ease-out' : 'none';
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'linear-gradient(135deg, #1a0505 0%, #2d0a0a 100%)', zIndex: 9999 }}>
             <video
               ref={garrafeiraVideoRef}
               autoPlay
               muted
               playsInline
-              onLoadedData={() => { console.log('[G] video onLoadedData'); setGVideoLoaded(true); }}
+              onLoadedData={() => setGVideoLoaded(true)}
+              style={{
+                position: 'fixed',
+                top: '50%',
+                left: '50%',
+                minWidth: '100%',
+                minHeight: '100%',
+                width: 'auto',
+                height: 'auto',
+                transform: 'translate(-50%, -50%)',
+                objectFit: 'cover',
+                zIndex: 1,
+                opacity: gVideoLoaded ? eOpacity : 0,
+                transition: eTransition,
+                pointerEvents: 'none',
+              }}
+            >
+              <source src={GARRAFEIRA_VIDEO_URL} type="video/mp4" />
+            </video>
+          </div>
+        );
+      }
+
+      // ── Main content (garrafeira after entrance, or meetings) ──
+      return (
+        <div className={isPortsSection ? 'min-h-screen' : 'min-h-screen section-enter'} style={isPortsSection ? { position: 'relative', overflow: 'hidden' } : undefined}>
+          {/* Garrafeira watermark video background */}
+          {isPortsSection && (
+            <video
+              autoPlay
+              muted
+              playsInline
               style={{
                 position: 'fixed',
                 top: '50%',
@@ -3328,8 +3342,7 @@
                 transform: 'translate(-50%, -50%)',
                 objectFit: 'cover',
                 zIndex: 0,
-                opacity: gVideoLoaded ? gVideoOpacity : 0,
-                transition: gVideoTransition,
+                opacity: 0.1,
                 pointerEvents: 'none',
               }}
             >
@@ -3346,17 +3359,13 @@
             }} />
           )}
 
-          {/* App Content — only mounts after garrafeira entrance completes */}
-          {(!isPortsSection || gShowContent) && (
-          <div
-            ref={isPortsSection ? (el) => { if (el) console.log('[G] CONTENT DIV MOUNTED, gContentOpacity:', gContentOpacity); } : undefined}
-            style={isPortsSection ? {
+          {/* App Content */}
+          <div style={isPortsSection ? {
             position: 'relative',
             zIndex: 2,
             opacity: gContentOpacity,
             transition: 'opacity 0.5s ease-in',
             pointerEvents: gContentOpacity ? 'auto' : 'none',
-            border: '3px solid blue', // DEBUG
           } : undefined}>
           {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
           {quickRate && (
@@ -3497,7 +3506,7 @@
           <footer className="max-w-5xl mx-auto px-4 py-4 text-center">
             <p className="text-port-500 text-xs">Cloud storage &mdash; data is shared across all Port Committee members.</p>
           </footer>
-          </div>)}
+          </div>
         </div>
       );
     }
