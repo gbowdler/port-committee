@@ -1112,9 +1112,9 @@
 
     /* ───────────────── Meeting List ───────────────── */
 
-    function MeetingList({ onSelect, onAdd }) {
-      const [meetings, setMeetings] = useState([]);
-      const [loading, setLoading] = useState(true);
+    function MeetingList({ onSelect, onAdd, initialMeetings }) {
+      const [meetings, setMeetings] = useState(initialMeetings || []);
+      const [loading, setLoading] = useState(!initialMeetings);
 
       const load = useCallback(async () => {
         setLoading(true);
@@ -1128,7 +1128,7 @@
         setLoading(false);
       }, []);
 
-      useEffect(() => { load(); }, [load]);
+      useEffect(() => { if (!initialMeetings) load(); }, [load, initialMeetings]);
 
       const today = new Date().toISOString().slice(0, 10);
       const upcoming = meetings
@@ -3142,16 +3142,19 @@
       const [toast, setToast] = useState(null);
       const [quickRate, setQuickRate] = useState(null);
 
-      // Garrafeira entrance video
+      // Section flags
       const isPortsSection = section === 'garrafeira';
-      const skipEntrance = !isPortsSection || !!initialNav;
-      const garrafeiraVideoRef = useRef(null);
-      const [gPhase, setGPhase] = useState(skipEntrance ? 'content' : 'entrance'); // 'entrance' | 'content'
-      const [gVideoPhase, setGVideoPhase] = useState('loading');
-      const [gVideoLoaded, setGVideoLoaded] = useState(false);
-      const [gContentOpacity, setGContentOpacity] = useState(skipEntrance ? 1 : 0);
+      const isMeetingsSection = section === 'meetings';
 
-      // Pre-load port data during entrance video
+      // ── Shared entrance video logic for both sections ──
+      const skipEntrance = !!initialNav;
+      const entranceVideoRef = useRef(null);
+      const [ePhase, setEPhase] = useState(skipEntrance ? 'content' : 'entrance');
+      const [eVideoPhase, setEVideoPhase] = useState('loading');
+      const [eVideoLoaded, setEVideoLoaded] = useState(false);
+      const [eContentOpacity, setEContentOpacity] = useState(skipEntrance ? 1 : 0);
+
+      // Pre-load port data during entrance
       const [preloadedPorts, setPreloadedPorts] = useState(null);
       const [preloadedRatings, setPreloadedRatings] = useState(null);
       useEffect(() => {
@@ -3173,51 +3176,66 @@
         })();
       }, [isPortsSection]);
 
+      // Pre-load meeting data during entrance
+      const [preloadedMeetings, setPreloadedMeetings] = useState(null);
+      useEffect(() => {
+        if (!isMeetingsSection) return;
+        (async () => {
+          const ids = (await storage.get('meetings:list')) || [];
+          const data = [];
+          for (const id of ids) {
+            const m = await storage.get(`meeting:${id}`);
+            if (m) data.push(m);
+          }
+          setPreloadedMeetings(data);
+        })();
+      }, [isMeetingsSection]);
+
       const showToast = useCallback((message, type = 'success') => {
         setToast({ message, type });
       }, []);
 
-      // Garrafeira entrance video sequence
+      // Entrance video sequence (shared for both sections)
       useEffect(() => {
-        if (skipEntrance || !gVideoLoaded) return;
-        setGVideoPhase('fade-in');
-        const t1 = setTimeout(() => setGVideoPhase('playing'), 500);
+        if (skipEntrance || !eVideoLoaded) return;
+        setEVideoPhase('fade-in');
+        const t1 = setTimeout(() => setEVideoPhase('playing'), 500);
         const tSlow = setTimeout(() => {
-          if (garrafeiraVideoRef.current) garrafeiraVideoRef.current.playbackRate = 0.8;
+          if (entranceVideoRef.current) entranceVideoRef.current.playbackRate = 0.8;
         }, 750);
-        const t2 = setTimeout(() => setGVideoPhase('fade-out'), 1250);
-        const t3 = setTimeout(() => setGVideoPhase('complete'), 2250);
+        const t2 = setTimeout(() => setEVideoPhase('fade-out'), 1250);
+        const t3 = setTimeout(() => setEVideoPhase('complete'), 2250);
         return () => { clearTimeout(t1); clearTimeout(tSlow); clearTimeout(t2); clearTimeout(t3); };
-      }, [gVideoLoaded, skipEntrance]);
+      }, [eVideoLoaded, skipEntrance]);
 
       // Fallback: skip entrance if video doesn't load within 3s
       useEffect(() => {
         if (skipEntrance) return;
         const fallback = setTimeout(() => {
-          if (!gVideoLoaded) {
-            setGVideoPhase('complete');
+          if (!eVideoLoaded) {
+            setEVideoPhase('complete');
           }
         }, 3000);
         return () => clearTimeout(fallback);
-      }, [gVideoLoaded, skipEntrance]);
+      }, [eVideoLoaded, skipEntrance]);
 
       // Transition to content when video done AND data loaded
       useEffect(() => {
-        if (gPhase !== 'entrance') return;
-        if (gVideoPhase === 'complete' && preloadedPorts !== null) {
-          setGPhase('content');
+        if (ePhase !== 'entrance') return;
+        const dataReady = isPortsSection ? preloadedPorts !== null : preloadedMeetings !== null;
+        if (eVideoPhase === 'complete' && dataReady) {
+          setEPhase('content');
         }
-      }, [gPhase, gVideoPhase, preloadedPorts]);
+      }, [ePhase, eVideoPhase, preloadedPorts, preloadedMeetings, isPortsSection]);
 
       // Fade in content after it mounts
       useEffect(() => {
-        if (gPhase !== 'content' || skipEntrance) return;
-        const raf = requestAnimationFrame(() => setGContentOpacity(1));
+        if (ePhase !== 'content' || skipEntrance) return;
+        const raf = requestAnimationFrame(() => setEContentOpacity(1));
         return () => cancelAnimationFrame(raf);
-      }, [gPhase, skipEntrance]);
+      }, [ePhase, skipEntrance]);
 
       const sectionTitle = isPortsSection ? 'Garrafeira' : 'Meetings';
-      const isMeetingsSection = section === 'meetings';
 
       const handleAddPort = async (data) => {
         const id = `port_${Date.now()}`;
@@ -3287,19 +3305,21 @@
       };
 
       const GARRAFEIRA_VIDEO_URL = 'https://firebasestorage.googleapis.com/v0/b/port-committee.firebasestorage.app/o/Assets%2Fgarrafeira-entrance.mp4?alt=media&token=f5d0abdd-18d5-4fa7-99a1-8e65b3d20be0';
+      const MEETINGS_VIDEO_URL = 'https://firebasestorage.googleapis.com/v0/b/port-committee.firebasestorage.app/o/Assets%2Fmeetings-entrance.mp4?alt=media&token=e92213f3-929b-4685-b7a1-5d8ec27029ba';
+      const CURRENT_VIDEO_URL = isPortsSection ? GARRAFEIRA_VIDEO_URL : MEETINGS_VIDEO_URL;
 
-      // ── Garrafeira entrance: completely separate early return ──
-      if (isPortsSection && gPhase === 'entrance') {
-        const eOpacity = { loading: 0, 'fade-in': 0, playing: 1, 'fade-out': 0.1, complete: 0.1 }[gVideoPhase] ?? 0;
-        const eTransition = gVideoPhase === 'fade-in' ? 'opacity 0.5s ease-in' : gVideoPhase === 'fade-out' ? 'opacity 1s ease-out' : 'none';
+      // ── Entrance: completely separate early return (both sections) ──
+      if (ePhase === 'entrance') {
+        const vOpacity = { loading: 0, 'fade-in': 0, playing: 1, 'fade-out': 0.1, complete: 0.1 }[eVideoPhase] ?? 0;
+        const vTransition = eVideoPhase === 'fade-in' ? 'opacity 0.5s ease-in' : eVideoPhase === 'fade-out' ? 'opacity 1s ease-out' : 'none';
         return (
           <div style={{ position: 'fixed', inset: 0, background: 'linear-gradient(135deg, #1a0505 0%, #2d0a0a 100%)', zIndex: 9999 }}>
             <video
-              ref={garrafeiraVideoRef}
+              ref={entranceVideoRef}
               autoPlay
               muted
               playsInline
-              onLoadedData={() => setGVideoLoaded(true)}
+              onLoadedData={() => setEVideoLoaded(true)}
               style={{
                 position: 'fixed',
                 top: '50%',
@@ -3311,62 +3331,59 @@
                 transform: 'translate(-50%, -50%)',
                 objectFit: 'cover',
                 zIndex: 1,
-                opacity: gVideoLoaded ? eOpacity : 0,
-                transition: eTransition,
+                opacity: eVideoLoaded ? vOpacity : 0,
+                transition: vTransition,
                 pointerEvents: 'none',
               }}
             >
-              <source src={GARRAFEIRA_VIDEO_URL} type="video/mp4" />
+              <source src={CURRENT_VIDEO_URL} type="video/mp4" />
             </video>
           </div>
         );
       }
 
-      // ── Main content (garrafeira after entrance, or meetings) ──
+      // ── Main content (after entrance for both sections) ──
+      const hasEntrance = !skipEntrance;
       return (
-        <div className={isPortsSection ? 'min-h-screen' : 'min-h-screen section-enter'} style={isPortsSection ? { position: 'relative', overflow: 'hidden' } : undefined}>
-          {/* Garrafeira watermark video background */}
-          {isPortsSection && (
-            <video
-              autoPlay
-              muted
-              playsInline
-              style={{
-                position: 'fixed',
-                top: '50%',
-                left: '50%',
-                minWidth: '100%',
-                minHeight: '100%',
-                width: 'auto',
-                height: 'auto',
-                transform: 'translate(-50%, -50%)',
-                objectFit: 'cover',
-                zIndex: 0,
-                opacity: 0.1,
-                pointerEvents: 'none',
-              }}
-            >
-              <source src={GARRAFEIRA_VIDEO_URL} type="video/mp4" />
-            </video>
-          )}
-          {isPortsSection && (
-            <div style={{
+        <div className="min-h-screen" style={{ position: 'relative', overflow: 'hidden' }}>
+          {/* Watermark video background */}
+          <video
+            autoPlay
+            muted
+            playsInline
+            style={{
               position: 'fixed',
-              inset: 0,
-              background: 'rgba(26, 5, 5, 0.35)',
-              zIndex: 1,
+              top: '50%',
+              left: '50%',
+              minWidth: '100%',
+              minHeight: '100%',
+              width: 'auto',
+              height: 'auto',
+              transform: 'translate(-50%, -50%)',
+              objectFit: 'cover',
+              zIndex: 0,
+              opacity: 0.1,
               pointerEvents: 'none',
-            }} />
-          )}
+            }}
+          >
+            <source src={CURRENT_VIDEO_URL} type="video/mp4" />
+          </video>
+          <div style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(26, 5, 5, 0.35)',
+            zIndex: 1,
+            pointerEvents: 'none',
+          }} />
 
           {/* App Content */}
-          <div style={isPortsSection ? {
+          <div style={hasEntrance ? {
             position: 'relative',
             zIndex: 2,
-            opacity: gContentOpacity,
+            opacity: eContentOpacity,
             transition: 'opacity 0.5s ease-in',
-            pointerEvents: gContentOpacity ? 'auto' : 'none',
-          } : undefined}>
+            pointerEvents: eContentOpacity ? 'auto' : 'none',
+          } : { position: 'relative', zIndex: 2 }}>
           {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
           {quickRate && (
             <QuickRateModal
@@ -3471,6 +3488,7 @@
                     key={Date.now()}
                     onSelect={(id) => { setSelectedMeeting(id); setMeetingView('detail'); }}
                     onAdd={() => setMeetingView('add')}
+                    initialMeetings={preloadedMeetings}
                   />
                 )}
                 {meetingView === 'add' && (
