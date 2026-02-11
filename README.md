@@ -1,6 +1,6 @@
 # Port Committee
 
-A sophisticated web application for tracking port tastings, coordinating meetings, and maintaining a shared library of reference materials.
+A sophisticated web application for tracking port tastings, coordinating meetings, and maintaining a shared library of reference materials. Features cinematic entrance videos, elegant transitions, and a refined browsing experience.
 
 ## What is Port Committee?
 
@@ -18,11 +18,22 @@ Port Committee is a private application for our group of friends who meet regula
 
 1. Receive an invitation from the administrator
 2. Visit: **https://gbowdler.github.io/port-committee**
-3. Enter your UK mobile number (e.g., 07123 456789)
-4. Receive an SMS verification code
-5. Enter the code to log in
-6. Set your display name (used throughout the app)
-7. You're in! Explore the sections
+3. Watch the elegant landing page entrance
+4. Enter your UK mobile number (e.g., 07123 456789)
+5. Receive an SMS verification code
+6. Enter the code to log in
+7. Set your display name (used throughout the app)
+8. Enjoy the cinematic experience!
+
+### Navigating Sections
+
+Each section has its own cinematic entrance video that plays when you enter:
+
+- **Meetings** - Schedule tastings, RSVP, upload photos (2.75s entrance)
+- **Garrafeira** - Browse and rate ports (2.25s entrance)
+- **Library** - Reference materials (2.75s entrance)
+
+The entrance videos create a sophisticated, refined experience while content loads seamlessly in the background.
 
 ### Returning Visits
 
@@ -30,9 +41,19 @@ Your session stays active, so you'll usually go straight to the app. If you've b
 
 ### Supported Devices
 
-Works on desktop browsers (Chrome, Firefox, Safari, Edge), mobile phones, and tablets.
+Works on desktop browsers (Chrome, Firefox, Safari, Edge), mobile phones, and tablets. Video playback requires H.264 codec support (all modern browsers).
 
 ## Main Sections
+
+### Cinematic Experience
+
+Every section features a cinematic entrance video that plays while content loads in the background:
+
+- **Dashboard** - Portugal/Douro Valley video background with elegant fade transitions
+- **Section Entrances** - Each section (Meetings, Garrafeira, Library) has its own thematic entrance video
+- **Watermark Backgrounds** - Videos fade to subtle 10% opacity watermarks while browsing
+- **Smart Loading** - Data loads during video playback so content appears instantly
+- **Mobile Optimised** - Entrance videos work smoothly on all devices
 
 ### Meetings
 
@@ -44,6 +65,7 @@ Schedule and coordinate tasting sessions.
 - **Attach Files** - Upload tasting notes, documents, or other files
 - **Preview** - View PDFs and images directly in the app without downloading
 - **Link Ports** - Connect ports tasted at the meeting to the Garrafeira
+- **Cinematic Entrance** - Thematic entrance video with watermark background
 
 ### Garrafeira (Port Collection)
 
@@ -56,6 +78,7 @@ Our shared collection of tasted ports.
 - **Search & Filter** - Find ports by name, type, or rating
 - **View Details** - See everyone's ratings, notes, and which meetings featured each port
 - **Year / Age** - Supports vintage years (e.g., 2016) and age statements (e.g., 10 Year Old)
+- **Cinematic Entrance** - Wine cellar themed entrance video with watermark background
 
 ### Library
 
@@ -66,6 +89,7 @@ Reference materials and shared resources.
 - **Search** - Find documents by name, description, or tags
 - **Preview** - View PDFs and images directly in the app
 - **Download** - Save documents for offline viewing
+- **Cinematic Entrance** - Books/knowledge themed entrance video with watermark background
 
 ## Tips
 
@@ -132,8 +156,11 @@ Check your internet connection, try refreshing, or try a different browser.
 **Can't upload files or photos?**
 Make sure the file is under 5 MB and is a supported type. Check your internet connection.
 
-**Video not playing on dashboard?**
-The app will gracefully skip the video if it can't load. This doesn't affect functionality.
+**Entrance video not playing?**
+The app will gracefully skip the video if it can't load (3s timeout on desktop, 5s on mobile). Content still appears normally without the video background.
+
+**Video stuttering on mobile?**
+This is rare but can happen on slower connections. The app automatically disables slow-motion effects on mobile to prevent stutter. Try on a stable Wi-Fi connection.
 
 **Preview not working?**
 PDFs require a modern browser. If preview fails, use the Download button instead.
