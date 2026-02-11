@@ -887,10 +887,10 @@
 
     /* ───────────────── Port List / Home View ───────────────── */
 
-    function PortList({ onSelect, onAdd }) {
-      const [ports, setPorts] = useState([]);
-      const [ratingsMap, setRatingsMap] = useState({});
-      const [loading, setLoading] = useState(true);
+    function PortList({ onSelect, onAdd, initialPorts, initialRatings }) {
+      const [ports, setPorts] = useState(initialPorts || []);
+      const [ratingsMap, setRatingsMap] = useState(initialRatings || {});
+      const [loading, setLoading] = useState(!initialPorts);
       const [search, setSearch] = useState('');
       const [typeFilter, setTypeFilter] = useState('');
       const [sort, setSort] = useState('date-desc');
@@ -913,7 +913,7 @@
         setLoading(false);
       }, []);
 
-      useEffect(() => { load(); }, [load]);
+      useEffect(() => { if (!initialPorts) load(); }, [load, initialPorts]);
 
       const getAvg = (id) => {
         const r = ratingsMap[id] || [];
@@ -3146,9 +3146,32 @@
       const skipGarrafeiraVideo = section !== 'garrafeira' || !!initialNav;
       const garrafeiraVideoRef = useRef(null);
       const [gVideoPhase, setGVideoPhase] = useState(skipGarrafeiraVideo ? 'complete' : 'loading');
+      const [gEntranceDone, setGEntranceDone] = useState(skipGarrafeiraVideo);
       const [gShowContent, setGShowContent] = useState(skipGarrafeiraVideo);
       const [gContentOpacity, setGContentOpacity] = useState(skipGarrafeiraVideo ? 1 : 0);
       const [gVideoLoaded, setGVideoLoaded] = useState(false);
+
+      // Pre-load port data during entrance video
+      const [preloadedPorts, setPreloadedPorts] = useState(null);
+      const [preloadedRatings, setPreloadedRatings] = useState(null);
+      useEffect(() => {
+        if (section !== 'garrafeira') return;
+        (async () => {
+          const ids = (await storage.get('ports:list')) || [];
+          const portData = [];
+          const ratData = {};
+          for (const id of ids) {
+            const p = await storage.get(`port:${id}`);
+            if (p) {
+              portData.push(p);
+              const r = await storage.get(`ratings:${id}`);
+              ratData[id] = r?.ratings || [];
+            }
+          }
+          setPreloadedPorts(portData);
+          setPreloadedRatings(ratData);
+        })();
+      }, [section]);
 
       const showToast = useCallback((message, type = 'success') => {
         setToast({ message, type });
@@ -3164,7 +3187,7 @@
         }, 750);
         const t2 = setTimeout(() => {
           setGVideoPhase('fade-out');
-          setGShowContent(true);
+          setGEntranceDone(true);
         }, 1250);
         const t3 = setTimeout(() => setGVideoPhase('complete'), 2250);
         return () => { clearTimeout(t1); clearTimeout(tSlow); clearTimeout(t2); clearTimeout(t3); };
@@ -3176,11 +3199,18 @@
         const fallback = setTimeout(() => {
           if (!gVideoLoaded) {
             setGVideoPhase('complete');
-            setGShowContent(true);
+            setGEntranceDone(true);
           }
         }, 3000);
         return () => clearTimeout(fallback);
       }, [gVideoLoaded, skipGarrafeiraVideo]);
+
+      // Show content when BOTH entrance done AND data loaded
+      useEffect(() => {
+        if (gEntranceDone && preloadedPorts !== null && !gShowContent) {
+          setGShowContent(true);
+        }
+      }, [gEntranceDone, preloadedPorts, gShowContent]);
 
       // Fade in content after it mounts
       useEffect(() => {
@@ -3378,6 +3408,8 @@
                     key={Date.now()}
                     onSelect={(id) => { setSelectedPort(id); setView('detail'); }}
                     onAdd={() => setView('add')}
+                    initialPorts={preloadedPorts}
+                    initialRatings={preloadedRatings}
                   />
                 )}
                 {view === 'add' && (
