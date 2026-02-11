@@ -3195,18 +3195,22 @@
         setToast({ message, type });
       }, []);
 
-      // Entrance video sequence (shared for both sections)
+      // Entrance video sequence (section-specific timing)
       useEffect(() => {
         if (skipEntrance || !eVideoLoaded) return;
         setEVideoPhase('fade-in');
+        // Meetings: extended full brightness (1.25s vs 0.75s)
+        const slowMs   = isMeetingsSection ? 1000 : 750;
+        const fadeOutMs = isMeetingsSection ? 1750 : 1250;
+        const doneMs   = isMeetingsSection ? 2750 : 2250;
         const t1 = setTimeout(() => setEVideoPhase('playing'), 500);
         const tSlow = setTimeout(() => {
           if (entranceVideoRef.current) entranceVideoRef.current.playbackRate = 0.8;
-        }, 750);
-        const t2 = setTimeout(() => setEVideoPhase('fade-out'), 1250);
-        const t3 = setTimeout(() => setEVideoPhase('complete'), 2250);
+        }, slowMs);
+        const t2 = setTimeout(() => setEVideoPhase('fade-out'), fadeOutMs);
+        const t3 = setTimeout(() => setEVideoPhase('complete'), doneMs);
         return () => { clearTimeout(t1); clearTimeout(tSlow); clearTimeout(t2); clearTimeout(t3); };
-      }, [eVideoLoaded, skipEntrance]);
+      }, [eVideoLoaded, skipEntrance, isMeetingsSection]);
 
       // Fallback: skip entrance if video doesn't load within 3s
       useEffect(() => {
