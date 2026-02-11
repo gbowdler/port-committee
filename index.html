@@ -2753,6 +2753,68 @@
     }
 
     function LibrarySection({ onBack, currentUserName }) {
+      const LIBRARY_VIDEO_URL = 'https://firebasestorage.googleapis.com/v0/b/port-committee.firebasestorage.app/o/Assets%2Flibrary-entrance.mp4?alt=media&token=d7c32f80-29da-4012-879c-026c436ada80';
+
+      // ── Entrance video state ──
+      const lVideoRef = useRef(null);
+      const [lPhase, setLPhase] = useState('entrance'); // entrance | content
+      const [lVideoPhase, setLVideoPhase] = useState('loading');
+      const [lVideoLoaded, setLVideoLoaded] = useState(false);
+      const [lContentOpacity, setLContentOpacity] = useState(0);
+      const lIsMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+      // Pre-load library data during entrance
+      const [preloadedDocs, setPreloadedDocs] = useState(null);
+      useEffect(() => {
+        (async () => {
+          const ids = (await storage.get('library:list')) || [];
+          const items = [];
+          for (const id of ids) {
+            const d = await storage.get(`library:${id}`);
+            if (d) items.push(d);
+          }
+          setPreloadedDocs(items);
+        })();
+      }, []);
+
+      // Entrance video sequence (same timing as Meetings: 2.75s)
+      useEffect(() => {
+        if (!lVideoLoaded) return;
+        setLVideoPhase('fade-in');
+        const t1 = setTimeout(() => setLVideoPhase('playing'), 500);
+        const tSlow = setTimeout(() => {
+          if (lVideoRef.current && !lIsMobile) {
+            try { lVideoRef.current.playbackRate = 0.8; } catch (e) { /* ignore */ }
+          }
+        }, 1000);
+        const t2 = setTimeout(() => setLVideoPhase('fade-out'), 1750);
+        const t3 = setTimeout(() => setLVideoPhase('complete'), 2750);
+        return () => { clearTimeout(t1); clearTimeout(tSlow); clearTimeout(t2); clearTimeout(t3); };
+      }, [lVideoLoaded]);
+
+      // Fallback: skip entrance if video doesn't load
+      useEffect(() => {
+        const fallback = setTimeout(() => {
+          if (!lVideoLoaded) setLVideoPhase('complete');
+        }, lIsMobile ? 5000 : 3000);
+        return () => clearTimeout(fallback);
+      }, [lVideoLoaded]);
+
+      // Transition to content when video done AND data loaded
+      useEffect(() => {
+        if (lPhase !== 'entrance') return;
+        if (lVideoPhase === 'complete' && preloadedDocs !== null) {
+          setLPhase('content');
+        }
+      }, [lPhase, lVideoPhase, preloadedDocs]);
+
+      // Fade in content after mount
+      useEffect(() => {
+        if (lPhase !== 'content') return;
+        const raf = requestAnimationFrame(() => setLContentOpacity(1));
+        return () => cancelAnimationFrame(raf);
+      }, [lPhase]);
+
       const [docs, setDocs] = useState([]);
       const [loading, setLoading] = useState(true);
       const [view, setView] = useState('list'); // list | upload
@@ -2765,6 +2827,14 @@
 
       const showToast = useCallback((message, type = 'success') => setToast({ message, type }), []);
 
+      // Initialize docs from preloaded data when entering content phase
+      useEffect(() => {
+        if (preloadedDocs) {
+          setDocs(preloadedDocs);
+          setLoading(false);
+        }
+      }, [preloadedDocs]);
+
       const load = useCallback(async () => {
         setLoading(true);
         const ids = (await storage.get('library:list')) || [];
@@ -2776,8 +2846,6 @@
         setDocs(items);
         setLoading(false);
       }, []);
-
-      useEffect(() => { load(); }, [load]);
 
       useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape' && previewDoc) setPreviewDoc(null); };
@@ -2881,8 +2949,82 @@
         return list;
       }, [docs, search, catFilter, sort]);
 
+      // ── Entrance: completely separate early return ──
+      if (lPhase === 'entrance') {
+        const vOpacity = { loading: 0, 'fade-in': 0, playing: 1, 'fade-out': 0.1, complete: 0.1 }[lVideoPhase] ?? 0;
+        const vTransition = lVideoPhase === 'fade-in' ? 'opacity 0.5s ease-in' : lVideoPhase === 'fade-out' ? 'opacity 1s ease-out' : 'none';
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'linear-gradient(135deg, #1a0505 0%, #2d0a0a 100%)', zIndex: 9999 }}>
+            <video
+              ref={lVideoRef}
+              autoPlay
+              muted
+              playsInline
+              preload="auto"
+              onCanPlay={() => setLVideoLoaded(true)}
+              style={{
+                position: 'fixed',
+                top: '50%',
+                left: '50%',
+                minWidth: '100%',
+                minHeight: '100%',
+                width: 'auto',
+                height: 'auto',
+                transform: 'translate(-50%, -50%)',
+                objectFit: 'cover',
+                zIndex: 1,
+                opacity: lVideoLoaded ? vOpacity : 0,
+                transition: vTransition,
+                pointerEvents: 'none',
+              }}
+            >
+              <source src={LIBRARY_VIDEO_URL} type="video/mp4" />
+            </video>
+          </div>
+        );
+      }
+
+      // ── Main content (after entrance) ──
       return (
-        <div className="section-enter min-h-screen">
+        <div className="min-h-screen" style={{ position: 'relative', overflow: 'hidden' }}>
+          {/* Watermark video background */}
+          <video
+            autoPlay
+            muted
+            playsInline
+            style={{
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              minWidth: '100%',
+              minHeight: '100%',
+              width: 'auto',
+              height: 'auto',
+              transform: 'translate(-50%, -50%)',
+              objectFit: 'cover',
+              zIndex: 0,
+              opacity: 0.1,
+              pointerEvents: 'none',
+            }}
+          >
+            <source src={LIBRARY_VIDEO_URL} type="video/mp4" />
+          </video>
+          <div style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(26, 5, 5, 0.35)',
+            zIndex: 1,
+            pointerEvents: 'none',
+          }} />
+
+          {/* App Content */}
+          <div style={{
+            position: 'relative',
+            zIndex: 2,
+            opacity: lContentOpacity,
+            transition: 'opacity 0.5s ease-in',
+            pointerEvents: lContentOpacity ? 'auto' : 'none',
+          }}>
           {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
           {deleteDoc && (
@@ -3014,6 +3156,7 @@
           <footer className="max-w-5xl mx-auto px-4 py-4 text-center">
             <p className="text-port-500 text-xs">Cloud storage &mdash; documents are shared across all Port Committee members.</p>
           </footer>
+          </div>
         </div>
       );
     }
