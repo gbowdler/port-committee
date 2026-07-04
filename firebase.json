@@ -15,13 +15,20 @@
       ".claude/**",
       ".github/**",
       "**/node_modules/**",
-      "**/*.mp4",
+      "source-assets/**",
       "**/*.md",
       "server.js",
       "package.json",
-      "PortCommittee_Favicon.png",
       "storage.rules",
       "firestore.rules"
+    ],
+    "headers": [
+      {
+        "source": "videos/**",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=604800" }
+        ]
+      }
     ]
   }
 }

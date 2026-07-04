@@ -2507,7 +2507,7 @@
       const videoOpacity = { loading: 0, 'fade-in': 0, playing: 1, 'fade-out': 0.08, complete: 0.08 }[videoPhase] ?? 0.08;
       const videoTransition = videoPhase === 'fade-in' ? 'opacity 0.5s ease-in' : videoPhase === 'fade-out' ? 'opacity 1s ease-out' : 'none';
 
-      const VIDEO_URL = 'https://firebasestorage.googleapis.com/v0/b/port-committee.firebasestorage.app/o/Assets%2F20260206_1128_New%20Video_storyboard_01kgsbbsgmfhfvg4remrrd3xq4%20(1).mp4?alt=media&token=1ac8e5ca-c014-46ce-8d7c-88e45e875f9f';
+      const VIDEO_URL = 'videos/dashboard-entrance.mp4';
 
       const sections = [
         {
@@ -2786,7 +2786,7 @@
     }
 
     function LibrarySection({ onBack, currentUserName }) {
-      const LIBRARY_VIDEO_URL = 'https://firebasestorage.googleapis.com/v0/b/port-committee.firebasestorage.app/o/Assets%2Flibrary-entrance.mp4?alt=media&token=d7c32f80-29da-4012-879c-026c436ada80';
+      const LIBRARY_VIDEO_URL = 'videos/library-entrance.mp4';
 
       // ── Entrance video state ──
       // Skip the entrance if it has already played this session.
@@ -3486,8 +3486,8 @@
         }
       };
 
-      const GARRAFEIRA_VIDEO_URL = 'https://firebasestorage.googleapis.com/v0/b/port-committee.firebasestorage.app/o/Assets%2Fgarrafeira-entrance.mp4?alt=media&token=f5d0abdd-18d5-4fa7-99a1-8e65b3d20be0';
-      const MEETINGS_VIDEO_URL = 'https://firebasestorage.googleapis.com/v0/b/port-committee.firebasestorage.app/o/Assets%2Fmeetings-entrance.mp4?alt=media&token=e92213f3-929b-4685-b7a1-5d8ec27029ba';
+      const GARRAFEIRA_VIDEO_URL = 'videos/garrafeira-entrance.mp4';
+      const MEETINGS_VIDEO_URL = 'videos/meetings-entrance.mp4';
       const CURRENT_VIDEO_URL = isPortsSection ? GARRAFEIRA_VIDEO_URL : MEETINGS_VIDEO_URL;
 
       // ── Entrance: completely separate early return (both sections) ──

@@ -1,0 +1,7 @@
+# Original uncompressed video exports and other raw assets (not deployed)
+source-assets/
+
+# Local tooling
+.claude/
+node_modules/
+storage.json
