@@ -1,0 +1,16 @@
+rules_version = '2';
+
+// Port Committee Cloud Storage rules.
+//
+// Uses the cross-service firestore.get() to check the same allowlist document
+// as the Firestore rules: portCommittee/config_approvedPhones { phones: [...] }
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null
+        && request.auth.token.phone_number != null
+        && request.auth.token.phone_number in
+           firestore.get(/databases/(default)/documents/portCommittee/config_approvedPhones).data.phones;
+    }
+  }
+}

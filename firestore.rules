@@ -1,0 +1,29 @@
+rules_version = '2';
+
+// Port Committee Firestore rules.
+//
+// Access is restricted to phone numbers listed in the document:
+//   portCommittee/config_approvedPhones   { phones: ['+447...', ...] }
+//
+// That document must exist BEFORE these rules are published, or everyone
+// (including approved members) will be locked out. See SECURITY.md.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isApprovedMember() {
+      return request.auth != null
+        && request.auth.token.phone_number != null
+        && request.auth.token.phone_number in
+           get(/databases/$(database)/documents/portCommittee/config_approvedPhones).data.phones;
+    }
+
+    match /portCommittee/{docId} {
+      allow read, write: if isApprovedMember();
+    }
+
+    // Deny everything else.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

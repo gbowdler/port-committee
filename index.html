@@ -259,22 +259,40 @@
 
     /* ───────────────── Phone Auth ───────────────── */
 
-    // Approved Port Committee members
-    const APPROVED_PHONE_NUMBERS = [
-      '[PHONE-REDACTED]',  // Gareth B
-      '[PHONE-REDACTED]',  // Duncan
-      '[PHONE-REDACTED]',  // Felix
-      '[PHONE-REDACTED]',  // Nick L
-      '[PHONE-REDACTED]',  // Chris C
-      '[PHONE-REDACTED]',  // Craig
-      '[PHONE-REDACTED]',  // David
-      '[PHONE-REDACTED]',  // Joe
-      '[PHONE-REDACTED]',  // Wardy
+    // SHA-256 hashes of approved members' E.164 phone numbers (e.g. '+447...').
+    // This pre-check only saves an SMS and gives a friendly error — it is NOT the
+    // security boundary. Real enforcement is in Firestore security rules, which
+    // check the signed-in user's phone number against portCommittee/config_approvedPhones.
+    // See SECURITY.md for how to add or remove a member.
+    const APPROVED_PHONE_HASHES = [
+      'c1370644e1dbb3bd7a43f99b685e6c88fab635a36f6df9cd5f0dd00b22a4ecf0',
+      '909f3507961191f294acafbff24bfa222e1f8042f952fb5934db17b790fb6671',
+      '9cec17ff20391f541faab569ece14144b6cab3f90546b8b0b1a6addfcc053a56',
+      'effb9a398129ff96ce8e498c19bf7153635b49515ba5c61f6d9f0cabd09fcf5a',
+      '4ece6ad9bef81f47147e8126d3efa0de183c5422bdf87e7701ee3a21ffce7f83',
+      '1479715bca17795aaf11b641d4893bfb3c2e13611aea737ca24d7b683cf122da',
+      '725cf23b259593cc276a4840671a7c6de31e20d575b38ac47c651bf048d38541',
+      '4a79286772b654a50b53ef6636f137a1a586d9d3209e9750cf9a022de4c85bb6',
+      '38b4eceef2a6672b7b5fcf1a156ccedeed1ddbd9efeff8bbadc976e2c2cc61f9',
     ];
 
-    function isPhoneApproved(phoneNumber) {
+    async function isPhoneApproved(phoneNumber) {
       const normalized = phoneNumber.replace(/\s/g, '');
-      return APPROVED_PHONE_NUMBERS.includes(normalized);
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(normalized));
+      const hex = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+      return APPROVED_PHONE_HASHES.includes(hex);
+    }
+
+    // Server-side approval check: under the Firestore rules in firestore.rules,
+    // only approved members can read this document. A permission-denied here
+    // means the signed-in phone number is not on the allowlist.
+    async function verifyServerApproval() {
+      try {
+        await db.collection('portCommittee').doc('config_approvedPhones').get();
+        return true;
+      } catch (e) {
+        return e.code !== 'permission-denied';
+      }
     }
 
     async function getUserProfile(userId) {
@@ -621,18 +639,16 @@
 
       const load = useCallback(async () => {
         setLoading(true);
-        const p = await storage.get(`port:${portId}`);
-        const r = await storage.get(`ratings:${portId}`);
+        const [p, r, meetingIds] = await Promise.all([
+          storage.get(`port:${portId}`),
+          storage.get(`ratings:${portId}`),
+          storage.get('meetings:list'),
+        ]);
         setPort(p);
         setRatings(r?.ratings || []);
         // Load meetings that include this port
-        const meetingIds = (await storage.get('meetings:list')) || [];
-        const mList = [];
-        for (const mid of meetingIds) {
-          const m = await storage.get(`meeting:${mid}`);
-          if (m && m.portsTasted && m.portsTasted.includes(portId)) mList.push(m);
-        }
-        setPortMeetings(mList);
+        const meetings = await storage.getMulti((meetingIds || []).map(mid => `meeting:${mid}`));
+        setPortMeetings(meetings.filter(m => m && m.portsTasted && m.portsTasted.includes(portId)));
         setLoading(false);
       }, [portId]);
 
@@ -896,24 +912,26 @@
       const [sort, setSort] = useState('date-desc');
 
       const load = useCallback(async () => {
-        setLoading(true);
         const ids = (await storage.get('ports:list')) || [];
+        const [portDocs, ratingDocs] = await Promise.all([
+          storage.getMulti(ids.map(id => `port:${id}`)),
+          storage.getMulti(ids.map(id => `ratings:${id}`)),
+        ]);
         const portData = [];
         const ratData = {};
-        for (const id of ids) {
-          const p = await storage.get(`port:${id}`);
-          if (p) {
-            portData.push(p);
-            const r = await storage.get(`ratings:${id}`);
-            ratData[id] = r?.ratings || [];
+        ids.forEach((id, i) => {
+          if (portDocs[i]) {
+            portData.push(portDocs[i]);
+            ratData[id] = ratingDocs[i]?.ratings || [];
           }
-        }
+        });
         setPorts(portData);
         setRatingsMap(ratData);
         setLoading(false);
       }, []);
 
-      useEffect(() => { if (!initialPorts) load(); }, [load, initialPorts]);
+      // Always refresh on mount; preloaded data (if any) paints instantly meanwhile.
+      useEffect(() => { load(); }, [load]);
 
       const getAvg = (id) => {
         const r = ratingsMap[id] || [];
@@ -1117,18 +1135,14 @@
       const [loading, setLoading] = useState(!initialMeetings);
 
       const load = useCallback(async () => {
-        setLoading(true);
         const ids = (await storage.get('meetings:list')) || [];
-        const data = [];
-        for (const id of ids) {
-          const m = await storage.get(`meeting:${id}`);
-          if (m) data.push(m);
-        }
-        setMeetings(data);
+        const docs = await storage.getMulti(ids.map(id => `meeting:${id}`));
+        setMeetings(docs.filter(Boolean));
         setLoading(false);
       }, []);
 
-      useEffect(() => { if (!initialMeetings) load(); }, [load, initialMeetings]);
+      // Always refresh on mount; preloaded data (if any) paints instantly meanwhile.
+      useEffect(() => { load(); }, [load]);
 
       const today = new Date().toISOString().slice(0, 10);
       const upcoming = meetings
@@ -1259,12 +1273,8 @@
       useEffect(() => {
         (async () => {
           const ids = (await storage.get('ports:list')) || [];
-          const data = [];
-          for (const id of ids) {
-            const p = await storage.get(`port:${id}`);
-            if (p) data.push(p);
-          }
-          setPorts(data);
+          const docs = await storage.getMulti(ids.map(id => `port:${id}`));
+          setPorts(docs.filter(Boolean));
           setLoading(false);
         })();
       }, []);
@@ -1461,12 +1471,8 @@
         const m = await storage.get(`meeting:${meetingId}`);
         setMeeting(m);
         if (m?.portsTasted?.length) {
-          const pList = [];
-          for (const pid of m.portsTasted) {
-            const p = await storage.get(`port:${pid}`);
-            if (p) pList.push(p);
-          }
-          setLinkedPorts(pList);
+          const docs = await storage.getMulti(m.portsTasted.map(pid => `port:${pid}`));
+          setLinkedPorts(docs.filter(Boolean));
         }
         setLoading(false);
       }, [meetingId]);
@@ -2109,7 +2115,7 @@
           if (!digits.startsWith('07')) throw new Error('UK mobile numbers should start with 07');
           if (digits.length !== 11) throw new Error('Please enter a valid 11-digit UK mobile number (e.g., 07123 456789)');
           const normalized = '+44' + digits.substring(1);
-          if (!isPhoneApproved(normalized)) throw new Error('This phone number is not authorized. Please contact an administrator.');
+          if (!(await isPhoneApproved(normalized))) throw new Error('This phone number is not authorized. Please contact an administrator.');
 
           // Create fresh invisible reCAPTCHA verifier
           if (window.recaptchaVerifier) {
@@ -2137,6 +2143,13 @@
         setLoading(true);
         try {
           const result = await confirmationResult.confirm(verificationCode);
+          if (!(await verifyServerApproval())) {
+            await auth.signOut();
+            setStep('phone');
+            setVerificationCode('');
+            setError('This phone number is not authorized. Please contact an administrator.');
+            return;
+          }
           const profile = await getUserProfile(result.user.uid);
           if (profile) {
             await updateLastLogin(result.user.uid);
@@ -2768,12 +2781,8 @@
       useEffect(() => {
         (async () => {
           const ids = (await storage.get('library:list')) || [];
-          const items = [];
-          for (const id of ids) {
-            const d = await storage.get(`library:${id}`);
-            if (d) items.push(d);
-          }
-          setPreloadedDocs(items);
+          const docs = await storage.getMulti(ids.map(id => `library:${id}`));
+          setPreloadedDocs(docs.filter(Boolean));
         })();
       }, []);
 
@@ -2834,18 +2843,6 @@
           setLoading(false);
         }
       }, [preloadedDocs]);
-
-      const load = useCallback(async () => {
-        setLoading(true);
-        const ids = (await storage.get('library:list')) || [];
-        const items = [];
-        for (const id of ids) {
-          const d = await storage.get(`library:${id}`);
-          if (d) items.push(d);
-        }
-        setDocs(items);
-        setLoading(false);
-      }, []);
 
       useEffect(() => {
         const onKey = (e) => { if (e.key === 'Escape' && previewDoc) setPreviewDoc(null); };
@@ -3304,16 +3301,18 @@
         if (!isPortsSection) return;
         (async () => {
           const ids = (await storage.get('ports:list')) || [];
+          const [portDocs, ratingDocs] = await Promise.all([
+            storage.getMulti(ids.map(id => `port:${id}`)),
+            storage.getMulti(ids.map(id => `ratings:${id}`)),
+          ]);
           const portData = [];
           const ratData = {};
-          for (const id of ids) {
-            const p = await storage.get(`port:${id}`);
-            if (p) {
-              portData.push(p);
-              const r = await storage.get(`ratings:${id}`);
-              ratData[id] = r?.ratings || [];
+          ids.forEach((id, i) => {
+            if (portDocs[i]) {
+              portData.push(portDocs[i]);
+              ratData[id] = ratingDocs[i]?.ratings || [];
             }
-          }
+          });
           setPreloadedPorts(portData);
           setPreloadedRatings(ratData);
         })();
@@ -3325,12 +3324,8 @@
         if (!isMeetingsSection) return;
         (async () => {
           const ids = (await storage.get('meetings:list')) || [];
-          const data = [];
-          for (const id of ids) {
-            const m = await storage.get(`meeting:${id}`);
-            if (m) data.push(m);
-          }
-          setPreloadedMeetings(data);
+          const docs = await storage.getMulti(ids.map(id => `meeting:${id}`));
+          setPreloadedMeetings(docs.filter(Boolean));
         })();
       }, [isMeetingsSection]);
 
@@ -3601,7 +3596,6 @@
               <>
                 {view === 'list' && (
                   <PortList
-                    key={Date.now()}
                     onSelect={(id) => { setSelectedPort(id); setView('detail'); }}
                     onAdd={() => setView('add')}
                     initialPorts={preloadedPorts}
@@ -3639,7 +3633,6 @@
               <>
                 {meetingView === 'list' && (
                   <MeetingList
-                    key={Date.now()}
                     onSelect={(id) => { setSelectedMeeting(id); setMeetingView('detail'); }}
                     onAdd={() => setMeetingView('add')}
                     initialMeetings={preloadedMeetings}
@@ -3696,6 +3689,12 @@
       useEffect(() => {
         const unsubscribe = auth.onAuthStateChanged(async (user) => {
           if (user) {
+            if (!(await verifyServerApproval())) {
+              await auth.signOut();
+              setCurrentUserName(null);
+              setAuthChecked(true);
+              return;
+            }
             const profile = await getUserProfile(user.uid);
             if (profile) {
               setCurrentUserName(profile.name);
