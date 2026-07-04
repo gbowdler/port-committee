@@ -5,3 +5,6 @@ source-assets/
 .claude/
 node_modules/
 storage.json
+
+# Firebase deploy cache
+.firebase/
