@@ -93,6 +93,26 @@
     ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
     ::-webkit-scrollbar-thumb { background: rgba(184,57,107,0.4); border-radius: 3px; }
 
+    /* ── Image loading: shimmer placeholder + fade-in ── */
+    .img-shimmer { background: linear-gradient(110deg, rgba(255,255,255,0.03) 30%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.03) 70%); background-size: 200% 100%; animation: shimmer 1.6s linear infinite; }
+    @keyframes shimmer { to { background-position: -200% 0; } }
+    .img-fade { opacity: 0; transition: opacity 0.5s ease, transform 0.3s ease; }
+    .img-fade.img-loaded { opacity: 1; }
+
+    /* ── Rating micro-animations ── */
+    @keyframes starPop { 0% { transform: scale(1); } 45% { transform: scale(1.4); } 100% { transform: scale(1); } }
+    @keyframes ratingGlow { 0% { box-shadow: 0 0 0 rgba(212,162,58,0); } 30% { box-shadow: 0 0 24px rgba(212,162,58,0.35); } 100% { box-shadow: 0 0 0 rgba(212,162,58,0); } }
+    .rating-glow { animation: ratingGlow 1.6s ease 0.15s; }
+
+    /* ── Respect OS reduced-motion preference ── */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
     /* ── Landing page ── */
     .landing {
       position: fixed;
@@ -376,6 +396,18 @@
       return meeting.date >= today && meeting.status !== 'completed';
     }
 
+    // Entrance videos, served from Firebase Hosting alongside the app
+    const VIDEO_URLS = {
+      dashboard: 'videos/dashboard-entrance.mp4',
+      garrafeira: 'videos/garrafeira-entrance.mp4',
+      meetings: 'videos/meetings-entrance.mp4',
+      library: 'videos/library-entrance.mp4',
+    };
+
+    // Honour the OS-level reduced-motion setting: entrance videos are skipped
+    // in JS; a prefers-reduced-motion media query in the CSS handles the rest.
+    const REDUCED_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
     const SORT_OPTIONS = [
       { value: 'rating-desc', label: 'Highest Rated' },
       { value: 'rating-asc', label: 'Lowest Rated' },
@@ -406,6 +438,9 @@
       const sizes = { sm: 'w-4 h-4', md: 'w-5 h-5', lg: 'w-7 h-7' };
       const sz = sizes[size] || sizes.md;
       const [hover, setHover] = useState(0);
+      // Incremented on each selection so the filled stars replay a staggered
+      // "pop" animation (the changing key remounts the svgs).
+      const [popKey, setPopKey] = useState(0);
 
       return (
         <div className="flex gap-0.5 items-center">
@@ -420,10 +455,15 @@
                 className={`${sz} transition-all ${interactive ? 'cursor-pointer hover:scale-110' : 'cursor-default'}`}
                 onMouseEnter={() => interactive && setHover(val)}
                 onMouseLeave={() => interactive && setHover(0)}
-                onClick={() => interactive && onChange && onChange(val)}
+                onClick={() => { if (interactive && onChange) { onChange(val); setPopKey(k => k + 1); } }}
                 aria-label={`${val} star${val > 1 ? 's' : ''}`}
               >
-                <svg viewBox="0 0 24 24" className={`${filled ? 'star-glow' : ''}`}>
+                <svg
+                  key={popKey}
+                  viewBox="0 0 24 24"
+                  className={`${filled ? 'star-glow' : ''}`}
+                  style={interactive && popKey && val <= rating ? { animation: 'starPop 0.35s ease', animationDelay: `${i * 25}ms` } : undefined}
+                >
                   <path
                     d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
                     fill={filled ? '#d4a23a' : 'transparent'}
@@ -644,6 +684,8 @@
       const [ratingErrors, setRatingErrors] = useState({});
       const [showConfirm, setShowConfirm] = useState(false);
       const [ratingFormExpanded, setRatingFormExpanded] = useState(false);
+      // Name whose rating was just saved — its card gets a one-off golden glow
+      const [justRated, setJustRated] = useState(null);
 
       const load = useCallback(async () => {
         setLoading(true);
@@ -690,6 +732,7 @@
           setNewRating(0);
           setNewNotes('');
           setRatingFormExpanded(false);
+          setJustRated(memberName.trim());
           showToast('Rating saved!');
         } else {
           showToast('Failed to save rating', 'error');
@@ -782,8 +825,8 @@
               <p className="text-port-400 text-sm">No ratings yet. Be the first!</p>
             ) : (
               <div className="space-y-4">
-                {ratings.sort((a, b) => new Date(b.date) - new Date(a.date)).map((r, i) => (
-                  <div key={i} className="glass-light rounded-lg p-4">
+                {[...ratings].sort((a, b) => new Date(b.date) - new Date(a.date)).map((r, i) => (
+                  <div key={i} className={`glass-light rounded-lg p-4 ${r.memberName === justRated ? 'rating-glow' : ''}`}>
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-medium text-port-100">{r.memberName}</span>
                       <span className="text-xs text-port-400">{new Date(r.date).toLocaleDateString()}</span>
@@ -869,7 +912,7 @@
                   return (
                     <button key={m.id} onClick={() => onNavigateToMeeting && onNavigateToMeeting(m.id)}
                       className="w-full text-left glass-light rounded-lg p-3 hover:bg-white/10 transition flex items-center justify-between">
-                      <span className="text-port-100 text-sm">{d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                      <span className="text-port-100 text-sm">{d.toLocaleDateString('en-GB', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                       <span className="text-port-400 text-sm">{m.location}</span>
                     </button>
                   );
@@ -889,8 +932,20 @@
           onClick={onClick}
           className="glass rounded-xl p-4 cursor-pointer hover:border-port-500/40 transition group"
         >
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
+          <div className="flex items-start justify-between gap-3">
+            {port.photo && (
+              <div className="img-shimmer w-14 h-14 rounded-lg flex-shrink-0 overflow-hidden border border-white/10">
+                <img
+                  src={port.photo}
+                  alt=""
+                  loading="lazy"
+                  onLoad={(e) => e.target.classList.add('img-loaded')}
+                  onError={(e) => e.target.classList.add('img-loaded')}
+                  className="img-fade w-full h-full object-cover"
+                />
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
               <span className="inline-block text-[10px] font-medium px-2 py-0.5 rounded-full bg-port-800/60 text-port-300 mb-1.5">{port.type}</span>
               <h3 className="font-display text-lg text-port-100 group-hover:text-gold-400 transition truncate">{port.name}</h3>
               <p className="text-port-400 text-sm truncate">{port.producer}{port.year ? ` \u00B7 ${port.year}` : ''}</p>
@@ -988,14 +1043,39 @@
                 className="w-full rounded-lg pl-9 pr-3 py-2.5 text-sm"
               />
             </div>
-            <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="rounded-lg px-3 py-2.5 text-sm min-w-[130px]">
-              <option value="">All Types</option>
-              {PORT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
             <select value={sort} onChange={(e) => setSort(e.target.value)} className="rounded-lg px-3 py-2.5 text-sm min-w-[150px]">
               {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
+
+          {/* Type filter chips — only types present in the collection are shown */}
+          {ports.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-6 -mt-3">
+              <button
+                onClick={() => setTypeFilter('')}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition ${
+                  typeFilter === '' ? 'bg-port-700 text-port-100 border border-port-500/40' : 'glass-light text-port-300 border border-transparent hover:bg-white/10'
+                }`}
+              >
+                All ({ports.length})
+              </button>
+              {PORT_TYPES.map((t) => {
+                const count = ports.filter((p) => p.type === t).length;
+                if (!count) return null;
+                return (
+                  <button
+                    key={t}
+                    onClick={() => setTypeFilter(typeFilter === t ? '' : t)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium transition ${
+                      typeFilter === t ? 'bg-port-700 text-port-100 border border-port-500/40' : 'glass-light text-port-300 border border-transparent hover:bg-white/10'
+                    }`}
+                  >
+                    {t} ({count})
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {/* Port Cards Grid */}
           {filtered.length === 0 ? (
@@ -1104,7 +1184,7 @@
       const maybeCount = meeting.attendees?.filter(a => a.rsvp === 'maybe').length || 0;
       const dateObj = new Date(meeting.date + 'T12:00:00');
       const isUpcoming = isMeetingUpcoming(meeting);
-      const formatted = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+      const formatted = dateObj.toLocaleDateString('en-GB', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 
       return (
         <div onClick={onClick} className="glass rounded-xl p-4 cursor-pointer hover:border-port-500/40 transition group">
@@ -1724,7 +1804,7 @@
       if (!meeting) return <p className="text-center text-port-400 py-12">Meeting not found.</p>;
 
       const dateObj = new Date(meeting.date + 'T12:00:00');
-      const formatted = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      const formatted = dateObj.toLocaleDateString('en-GB', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
       const isUpcoming = isMeetingUpcoming(meeting);
       const attendees = meeting.attendees || [];
 
@@ -2013,14 +2093,17 @@
                 {meeting.photos.map(photo => (
                   <div
                     key={photo.id}
-                    className="relative group cursor-pointer rounded-lg overflow-hidden border border-white/10"
+                    className="img-shimmer relative group cursor-pointer rounded-lg overflow-hidden border border-white/10"
                     style={{ aspectRatio: '4/3' }}
                     onClick={() => { setPreviewPhoto(photo); setEditingCaption(null); }}
                   >
                     <img
                       src={photo.url}
                       alt={photo.caption || 'Meeting photo'}
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      loading="lazy"
+                      onLoad={(e) => e.target.classList.add('img-loaded')}
+                      onError={(e) => e.target.classList.add('img-loaded')}
+                      className="img-fade w-full h-full object-cover group-hover:scale-105"
                     />
                     {/* Caption overlay */}
                     {photo.caption && (
@@ -2102,12 +2185,23 @@
 
     function PhoneLoginScreen({ onLoginSuccess }) {
       const [step, setStep] = useState('phone'); // 'phone' | 'code' | 'name'
-      const [phoneNumber, setPhoneNumber] = useState('');
+      // Prefill the number this device last signed in with
+      const [phoneNumber, setPhoneNumber] = useState(() => localStorage.getItem('pc_phone') || '');
       const [verificationCode, setVerificationCode] = useState('');
       const [userName, setUserName] = useState('');
       const [error, setError] = useState('');
       const [loading, setLoading] = useState(false);
       const [confirmationResult, setConfirmationResult] = useState(null);
+      // Seconds until "Resend code" becomes available again
+      const [resendIn, setResendIn] = useState(0);
+      // Guards the auto-submit so a failed code isn't retried in a loop
+      const autoSubmitted = useRef(false);
+
+      useEffect(() => {
+        if (resendIn <= 0) return;
+        const t = setTimeout(() => setResendIn(s => s - 1), 1000);
+        return () => clearTimeout(t);
+      }, [resendIn]);
 
       // If already authenticated (e.g. page refreshed during name step), jump to name
       useEffect(() => {
@@ -2132,6 +2226,10 @@
 
           const confirmation = await auth.signInWithPhoneNumber(normalized, window.recaptchaVerifier);
           setConfirmationResult(confirmation);
+          localStorage.setItem('pc_phone', digits);
+          setVerificationCode('');
+          autoSubmitted.current = false;
+          setResendIn(30);
           setStep('code');
         } catch (err) {
           console.error('Error sending code:', err);
@@ -2180,6 +2278,17 @@
           setLoading(false);
         }
       };
+
+      // Auto-verify the moment a full 6-digit code is present (typed or
+      // filled from the SMS). The ref stops a failed code re-submitting.
+      useEffect(() => {
+        if (step !== 'code') return;
+        if (verificationCode.length < 6) { autoSubmitted.current = false; return; }
+        if (!loading && !autoSubmitted.current && confirmationResult) {
+          autoSubmitted.current = true;
+          verifyCode();
+        }
+      }, [verificationCode, step, loading, confirmationResult]);
 
       const saveName = async () => {
         if (!userName.trim()) { setError('Please enter your name'); return; }
@@ -2250,6 +2359,7 @@
                   <input
                     type="text"
                     inputMode="numeric"
+                    autoComplete="one-time-code"
                     maxLength={6}
                     placeholder="000000"
                     value={verificationCode}
@@ -2266,6 +2376,13 @@
                   className="w-full py-2.5 rounded-lg bg-port-700 text-port-100 hover:bg-port-600 transition text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed mb-3"
                 >
                   {loading ? 'Verifying...' : 'Verify Code'}
+                </button>
+                <button
+                  onClick={sendCode}
+                  disabled={loading || resendIn > 0}
+                  className="w-full py-2.5 rounded-lg glass-light text-port-300 hover:bg-white/10 transition text-sm disabled:opacity-40 disabled:cursor-not-allowed mb-3"
+                >
+                  {resendIn > 0 ? `Resend code (${resendIn}s)` : 'Resend code'}
                 </button>
                 <button
                   onClick={() => { setStep('phone'); setVerificationCode(''); setError(''); }}
@@ -2461,14 +2578,33 @@
     // returning to a section skips straight to content.
     const _sectionEntranceSeen = {};
 
+    // Ensures the section-video prefetch only happens once per session
+    const _videosPrefetched = { current: false };
+
     function Dashboard({ onSelectSection, currentUserName, onLogout }) {
       const videoRef = useRef(null);
-      const [videoPhase, setVideoPhase] = useState(() => _dashboardVideoSeen.current ? 'complete' : 'loading');
-      const [showContent, setShowContent] = useState(_dashboardVideoSeen.current);
+      // Skip the intro if it has already played this session, or the OS asks
+      // for reduced motion.
+      const skipVideo = _dashboardVideoSeen.current || REDUCED_MOTION;
+      const [videoPhase, setVideoPhase] = useState(() => skipVideo ? 'complete' : 'loading');
+      const [showContent, setShowContent] = useState(skipVideo);
       const [videoLoaded, setVideoLoaded] = useState(false);
 
+      // Warm the browser cache for the section entrance videos while the user
+      // is choosing a section, so first entrances start instantly. The videos
+      // are served with a long cache header, so this is one download per week.
       useEffect(() => {
-        if (_dashboardVideoSeen.current) return;
+        if (_videosPrefetched.current) return;
+        const t = setTimeout(() => {
+          _videosPrefetched.current = true;
+          [VIDEO_URLS.garrafeira, VIDEO_URLS.meetings, VIDEO_URLS.library]
+            .forEach(u => { fetch(u).catch(() => {}); });
+        }, 2500);
+        return () => clearTimeout(t);
+      }, []);
+
+      useEffect(() => {
+        if (skipVideo) return;
 
         if (!videoLoaded) return;
 
@@ -2493,7 +2629,7 @@
 
       // Fallback: if video fails to load within 3s, skip to content
       useEffect(() => {
-        if (_dashboardVideoSeen.current) return;
+        if (skipVideo) return;
         const fallback = setTimeout(() => {
           if (!videoLoaded) {
             setVideoPhase('complete');
@@ -2507,7 +2643,7 @@
       const videoOpacity = { loading: 0, 'fade-in': 0, playing: 1, 'fade-out': 0.08, complete: 0.08 }[videoPhase] ?? 0.08;
       const videoTransition = videoPhase === 'fade-in' ? 'opacity 0.5s ease-in' : videoPhase === 'fade-out' ? 'opacity 1s ease-out' : 'none';
 
-      const VIDEO_URL = 'videos/dashboard-entrance.mp4';
+      const VIDEO_URL = VIDEO_URLS.dashboard;
 
       const sections = [
         {
@@ -2544,8 +2680,8 @@
 
       return (
         <div style={{ position: 'relative', minHeight: '100vh', overflow: 'hidden' }}>
-          {/* Video Background */}
-          <video
+          {/* Video Background (omitted for reduced-motion users) */}
+          {!REDUCED_MOTION && <video
             ref={videoRef}
             autoPlay
             muted
@@ -2568,7 +2704,7 @@
             }}
           >
             <source src={VIDEO_URL} type="video/mp4" />
-          </video>
+          </video>}
 
           {/* Dark overlay for readability */}
           <div style={{
@@ -2786,11 +2922,11 @@
     }
 
     function LibrarySection({ onBack, currentUserName }) {
-      const LIBRARY_VIDEO_URL = 'videos/library-entrance.mp4';
+      const LIBRARY_VIDEO_URL = VIDEO_URLS.library;
 
       // ── Entrance video state ──
       // Skip the entrance if it has already played this session.
-      const lSkipEntrance = !!_sectionEntranceSeen.library;
+      const lSkipEntrance = !!_sectionEntranceSeen.library || REDUCED_MOTION;
       const lVideoRef = useRef(null);
       const [lPhase, setLPhase] = useState(lSkipEntrance ? 'content' : 'entrance'); // entrance | content
       const [lVideoPhase, setLVideoPhase] = useState('loading');
@@ -3011,8 +3147,8 @@
       // ── Main content (after entrance) ──
       return (
         <div className="min-h-screen" style={{ position: 'relative', overflow: 'hidden' }}>
-          {/* Watermark video background */}
-          <video
+          {/* Watermark video background (omitted for reduced-motion users) */}
+          {!REDUCED_MOTION && <video
             autoPlay
             muted
             playsInline
@@ -3032,7 +3168,7 @@
             }}
           >
             <source src={LIBRARY_VIDEO_URL} type="video/mp4" />
-          </video>
+          </video>}
           <div style={{
             position: 'fixed',
             inset: 0,
@@ -3316,7 +3452,7 @@
       // ── Shared entrance video logic for both sections ──
       // Skip when deep-linking from another section, or when this section's
       // entrance has already played this session.
-      const skipEntrance = !!initialNav || !!_sectionEntranceSeen[section];
+      const skipEntrance = !!initialNav || !!_sectionEntranceSeen[section] || REDUCED_MOTION;
       const entranceVideoRef = useRef(null);
       const [ePhase, setEPhase] = useState(skipEntrance ? 'content' : 'entrance');
       const [eVideoPhase, setEVideoPhase] = useState('loading');
@@ -3486,9 +3622,7 @@
         }
       };
 
-      const GARRAFEIRA_VIDEO_URL = 'videos/garrafeira-entrance.mp4';
-      const MEETINGS_VIDEO_URL = 'videos/meetings-entrance.mp4';
-      const CURRENT_VIDEO_URL = isPortsSection ? GARRAFEIRA_VIDEO_URL : MEETINGS_VIDEO_URL;
+      const CURRENT_VIDEO_URL = isPortsSection ? VIDEO_URLS.garrafeira : VIDEO_URLS.meetings;
 
       // ── Entrance: completely separate early return (both sections) ──
       if (ePhase === 'entrance') {
@@ -3529,8 +3663,8 @@
       const hasEntrance = !skipEntrance;
       return (
         <div className="min-h-screen" style={{ position: 'relative', overflow: 'hidden' }}>
-          {/* Watermark video background */}
-          <video
+          {/* Watermark video background (omitted for reduced-motion users) */}
+          {!REDUCED_MOTION && <video
             autoPlay
             muted
             playsInline
@@ -3550,7 +3684,7 @@
             }}
           >
             <source src={CURRENT_VIDEO_URL} type="video/mp4" />
-          </video>
+          </video>}
           <div style={{
             position: 'fixed',
             inset: 0,
