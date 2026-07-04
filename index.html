@@ -8,7 +8,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
@@ -2128,7 +2128,16 @@
           setStep('code');
         } catch (err) {
           console.error('Error sending code:', err);
-          setError(err.message || 'Failed to send verification code.');
+          const code = err.code || '';
+          let msg = err.message || 'Failed to send verification code.';
+          if (code === 'auth/too-many-requests' || code === 'auth/quota-exceeded') {
+            msg = 'Too many requests — SMS limit reached. Please wait a few minutes and try again.';
+          } else if (code === 'auth/captcha-check-failed' || code === 'auth/internal-error') {
+            msg = 'Security check failed. Please refresh the page and try again.';
+          } else if (code === 'auth/unauthorized-domain') {
+            msg = 'This domain is not authorised for sign-in. Please contact Gareth.';
+          }
+          setError(msg);
           if (window.recaptchaVerifier) {
             try { window.recaptchaVerifier.clear(); } catch (_) {}
             window.recaptchaVerifier = null;
@@ -3687,7 +3696,11 @@
 
       // Listen for auth state changes
       useEffect(() => {
+        // Safety net: if Firebase doesn't respond within 10s, show the login screen
+        const timeout = setTimeout(() => setAuthChecked(true), 10000);
+
         const unsubscribe = auth.onAuthStateChanged(async (user) => {
+          clearTimeout(timeout);
           if (user) {
             if (!(await verifyServerApproval())) {
               await auth.signOut();
@@ -3708,7 +3721,7 @@
           }
           setAuthChecked(true);
         });
-        return () => unsubscribe();
+        return () => { unsubscribe(); clearTimeout(timeout); };
       }, []);
 
       const handleLoginSuccess = useCallback((name) => {
