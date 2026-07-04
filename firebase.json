@@ -4,5 +4,24 @@
   },
   "storage": {
     "rules": "storage.rules"
+  },
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/.*/**",
+      ".git/**",
+      ".claude/**",
+      ".github/**",
+      "**/node_modules/**",
+      "**/*.mp4",
+      "**/*.md",
+      "server.js",
+      "package.json",
+      "PortCommittee_Favicon.png",
+      "storage.rules",
+      "firestore.rules"
+    ]
   }
 }
