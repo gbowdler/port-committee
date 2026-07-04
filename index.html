@@ -368,6 +368,14 @@
 
     const PORT_TYPES = ['Vintage', 'Tawny', 'Ruby', 'LBV', 'White', 'Rose', 'Crusted'];
 
+    // A meeting counts as upcoming if its date is today or later and it hasn't
+    // been explicitly marked completed; past-dated meetings are always completed,
+    // regardless of the stored status field (which nobody remembers to update).
+    function isMeetingUpcoming(meeting) {
+      const today = new Date().toISOString().slice(0, 10);
+      return meeting.date >= today && meeting.status !== 'completed';
+    }
+
     const SORT_OPTIONS = [
       { value: 'rating-desc', label: 'Highest Rated' },
       { value: 'rating-asc', label: 'Lowest Rated' },
@@ -1095,7 +1103,7 @@
       const yesCount = meeting.attendees?.filter(a => a.rsvp === 'yes').length || 0;
       const maybeCount = meeting.attendees?.filter(a => a.rsvp === 'maybe').length || 0;
       const dateObj = new Date(meeting.date + 'T12:00:00');
-      const isUpcoming = meeting.status === 'upcoming';
+      const isUpcoming = isMeetingUpcoming(meeting);
       const formatted = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 
       return (
@@ -1144,12 +1152,11 @@
       // Always refresh on mount; preloaded data (if any) paints instantly meanwhile.
       useEffect(() => { load(); }, [load]);
 
-      const today = new Date().toISOString().slice(0, 10);
       const upcoming = meetings
-        .filter(m => m.status === 'upcoming' || m.date >= today)
+        .filter(isMeetingUpcoming)
         .sort((a, b) => a.date.localeCompare(b.date));
       const past = meetings
-        .filter(m => m.status === 'completed' && m.date < today)
+        .filter(m => !isMeetingUpcoming(m))
         .sort((a, b) => b.date.localeCompare(a.date));
 
       if (loading) return <Spinner />;
@@ -1718,7 +1725,7 @@
 
       const dateObj = new Date(meeting.date + 'T12:00:00');
       const formatted = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-      const isUpcoming = meeting.status === 'upcoming';
+      const isUpcoming = isMeetingUpcoming(meeting);
       const attendees = meeting.attendees || [];
 
       return (
@@ -2450,6 +2457,10 @@
     // Track whether video has been seen this session (persists across re-renders)
     const _dashboardVideoSeen = { current: false };
 
+    // Track which section entrance videos have played this session, so
+    // returning to a section skips straight to content.
+    const _sectionEntranceSeen = {};
+
     function Dashboard({ onSelectSection, currentUserName, onLogout }) {
       const videoRef = useRef(null);
       const [videoPhase, setVideoPhase] = useState(() => _dashboardVideoSeen.current ? 'complete' : 'loading');
@@ -2778,11 +2789,18 @@
       const LIBRARY_VIDEO_URL = 'https://firebasestorage.googleapis.com/v0/b/port-committee.firebasestorage.app/o/Assets%2Flibrary-entrance.mp4?alt=media&token=d7c32f80-29da-4012-879c-026c436ada80';
 
       // ── Entrance video state ──
+      // Skip the entrance if it has already played this session.
+      const lSkipEntrance = !!_sectionEntranceSeen.library;
       const lVideoRef = useRef(null);
-      const [lPhase, setLPhase] = useState('entrance'); // entrance | content
+      const [lPhase, setLPhase] = useState(lSkipEntrance ? 'content' : 'entrance'); // entrance | content
       const [lVideoPhase, setLVideoPhase] = useState('loading');
       const [lVideoLoaded, setLVideoLoaded] = useState(false);
-      const [lContentOpacity, setLContentOpacity] = useState(0);
+      const [lContentOpacity, setLContentOpacity] = useState(lSkipEntrance ? 1 : 0);
+
+      // Remember the entrance so re-entering the library goes straight to content
+      useEffect(() => {
+        if (lPhase === 'content') _sectionEntranceSeen.library = true;
+      }, [lPhase]);
       const lIsMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 
       // Pre-load library data during entrance
@@ -3296,12 +3314,19 @@
       const isMeetingsSection = section === 'meetings';
 
       // ── Shared entrance video logic for both sections ──
-      const skipEntrance = !!initialNav;
+      // Skip when deep-linking from another section, or when this section's
+      // entrance has already played this session.
+      const skipEntrance = !!initialNav || !!_sectionEntranceSeen[section];
       const entranceVideoRef = useRef(null);
       const [ePhase, setEPhase] = useState(skipEntrance ? 'content' : 'entrance');
       const [eVideoPhase, setEVideoPhase] = useState('loading');
       const [eVideoLoaded, setEVideoLoaded] = useState(false);
       const [eContentOpacity, setEContentOpacity] = useState(skipEntrance ? 1 : 0);
+
+      // Remember the entrance so re-entering this section goes straight to content
+      useEffect(() => {
+        if (ePhase === 'content') _sectionEntranceSeen[section] = true;
+      }, [ePhase, section]);
 
       // Pre-load port data during entrance
       const [preloadedPorts, setPreloadedPorts] = useState(null);
